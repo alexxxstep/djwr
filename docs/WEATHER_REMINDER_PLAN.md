@@ -12,10 +12,13 @@
 | Task Queue        | Celery + Celery Beat                                         |
 | Auth              | JWT (djangorestframework-simplejwt) + OAuth (Google, GitHub) |
 | Frontend          | Webpack, Tailwind CSS, ES6 Modules                           |
-| Weather API       | OpenWeatherMap (Free tier)                                   |
+| Weather API       | OpenWeatherMap (Free tier), Weatherbit.io (optional)         |
 | Package Manager   | UV (Python), npm (Node.js)                                   |
-| Container         | Docker + Docker Compose                                      |
+| Container         | Docker + Docker Compose (required)                           |
+| CI/CD             | GitLab CI or GitHub Actions                                  |
+| API Documentation | drf-spectacular (OpenAPI 3.0) + Swagger UI + ReDoc           |
 | Development Tools | django-debug-toolbar (dev only)                              |
+| Testing           | pytest with pytest-cov (code coverage required)              |
 
 ---
 
@@ -124,6 +127,21 @@ weather_reminder/
 - `updated_at` (auto_now)
 
 **Note:** All models inherit from BaseModel except User (AbstractUser already has timestamps).
+
+### Fill Database with Fake Data
+
+After creating migrations, fill database with fake data for testing and development:
+
+- Create Django management command: `python manage.py create_fake_data`
+- Or create fixtures using Factory Boy
+- Generate fake data:
+  - Sample users (5-10 users)
+  - Sample cities (10-20 cities from different countries)
+  - Sample subscriptions (link users to cities)
+  - Sample weather data (for different cities and periods)
+  - Sample notification logs
+- Use Django's `factory_boy` or `faker` library for data generation
+- Verify data in Django admin panel
 
 ---
 
@@ -347,6 +365,8 @@ Abstract base model providing common timestamp fields.
 
 ## Weather Data Sources
 
+**📖 For detailed API integration guide, see: [OpenWeatherMap API Guide](OPENWEATHERMAP_API_GUIDE.md)**
+
 ### OpenWeatherMap (Free Tier)
 
 **Free tier limits:**
@@ -371,6 +391,13 @@ Abstract base model providing common timestamp fields.
 2. Get free API key
 3. Add to `.env`: `WEATHER_API_KEY=your-api-key`
 
+**Alternative Weather Service (Optional):**
+
+- **Weatherbit.io**: https://www.weatherbit.io/api
+  - Alternative weather service if needed
+  - Compare features and rate limits with OpenWeatherMap
+  - Add to `.env`: `WEATHERBIT_API_KEY=your-api-key` (optional)
+
 **Data Flow:**
 
 1. Celery task `fetch_weather_data` calls WeatherService
@@ -390,8 +417,29 @@ Abstract base model providing common timestamp fields.
 
 **Caching Strategy:**
 
-- Database: WeatherData model stores latest data per city
-- Redis (optional): 15-minute cache for frequently accessed cities
+- **Database**: WeatherData model stores latest data per city and period
+- **Redis (Required)**: Multi-layer cache to reduce API calls
+  - **Cache-first approach**: Check Redis before making API requests
+  - **Cache key format**: `weather:{city_id}:{forecast_period}`
+  - **TTL (Time To Live)** based on forecast period:
+    - `current`: 10 minutes (weather changes frequently)
+    - `today`, `tomorrow`: 30 minutes (short-term forecast)
+    - `3days`, `week`: 60 minutes (medium-term forecast)
+    - `hourly`: 15 minutes (hourly data updates frequently)
+    - `10days`, `2weeks`, `month`: 120 minutes (long-term forecast)
+  - **Cache workflow**:
+    1. Check Redis cache for `weather:{city_id}:{period}`
+    2. If cached and not expired: Return cached data (no API call)
+    3. If not cached or expired: Fetch from OpenWeatherMap API
+    4. Save response to Redis with appropriate TTL
+    5. Save to WeatherData model (database persistence)
+    6. Return data to caller
+  - **Benefits**:
+    - ✅ Reduces API calls significantly (especially for popular cities)
+    - ✅ Faster response times (Redis is much faster than API calls)
+    - ✅ Respects rate limits (60 calls/minute free tier)
+    - ✅ Works even if API is temporarily unavailable (for cached data)
+    - ✅ Cost-efficient (fewer API calls = lower usage)
 
 **City Search Strategy (Optimal Approach):**
 
@@ -454,12 +502,18 @@ Abstract base model providing common timestamp fields.
 
 ### 1. fetch_weather_data
 
-- Fetches weather from OpenWeatherMap API
+- Fetches weather from OpenWeatherMap API with Redis caching
 - Accepts `city_id` and optional `forecast_period` parameter
+- **Cache-first approach**:
+  1. Check Redis cache for `weather:{city_id}:{period}`
+  2. If cached and not expired: Return cached data (skip API call)
+  3. If not cached or expired: Fetch from OpenWeatherMap API
+  4. Save response to Redis with TTL based on period
+  5. Save to WeatherData model with `forecast_period` field
 - Uses appropriate API endpoint based on period (current, forecast, hourly)
-- Saves to WeatherData model with `forecast_period` field
 - Auto-retry on failure (3 retries)
 - Time limit: 30 seconds
+- **Benefits**: Reduces API calls by 70-90% for frequently accessed cities
 
 ### 2. send_notification
 
@@ -496,13 +550,35 @@ Abstract base model providing common timestamp fields.
 
 ### WeatherService
 
-- `fetch_current_weather(city)` - Calls OpenWeatherMap API for current weather
-- `fetch_forecast(city, period)` - Calls OpenWeatherMap API for forecast
+- **Configure weather API client**:
+  - Use OpenWeatherMap API as primary service
+  - (Optional) Support Weatherbit.io as fallback
+  - Handle API authentication and headers
+- `fetch_current_weather(city)` - Fetches current weather with Redis caching
+  - Checks Redis cache first (`weather:{city_id}:current`)
+  - If cached: Returns cached data
+  - If not cached: Calls OpenWeatherMap API (or Weatherbit.io), caches result (TTL: 10 min), saves to DB
+- `fetch_forecast(city, period)` - Fetches forecast with Redis caching
   - Period options: `current`, `today`, `tomorrow`, `3days`, `week`, `hourly`
+  - Checks Redis cache first (`weather:{city_id}:{period}`)
+  - If cached: Returns cached data
+  - If not cached: Calls OpenWeatherMap API (or Weatherbit.io), caches result (TTL based on period), saves to DB
 - `search_cities(query)` - Searches cities via Geocoding API
-  - Calls `/geo/1.0/direct?q={query}&limit=5`
+  - Calls OpenWeatherMap `/geo/1.0/direct?q={query}&limit=5`
+  - (Optional) Support Weatherbit.io Geocoding API as fallback
   - Returns list of city data (name, country, lat, lon)
   - Does NOT save to database (CityService handles that)
+  - Implement retry logic for rate limit errors
+- `_get_cache_key(city_id, period)` - Generates Redis cache key
+  - Format: `weather:{city_id}:{period}`
+- `_get_cache_ttl(period)` - Returns TTL in seconds based on forecast period
+  - `current`: 600 seconds (10 min)
+  - `today`, `tomorrow`: 1800 seconds (30 min)
+  - `3days`, `week`: 3600 seconds (60 min)
+  - `hourly`: 900 seconds (15 min)
+  - `10days`, `2weeks`, `month`: 7200 seconds (120 min)
+- `_get_from_cache(cache_key)` - Retrieves data from Redis
+- `_save_to_cache(cache_key, data, ttl)` - Saves data to Redis with TTL
 - `_parse_response(data, period)` - Transforms API response to our format
 - `_parse_geocoding_response(data)` - Transforms Geocoding API response
 - Error handling with retries
@@ -610,33 +686,74 @@ City.objects.get_or_create(
 2. Task finds all active subscriptions where `is_due_for_notification() == True`
 3. For each subscription:
    - Spawns `fetch_weather_data(city_id, forecast_period=subscription.forecast_period)` task
-   - After weather fetched, spawns `send_notification(subscription_id)` task
+   - **Task uses Redis caching**: Checks cache first, only calls API if needed
+   - After weather fetched (from cache or API), spawns `send_notification(subscription_id)` task
 4. `send_notification` task:
-   - Gets weather data from WeatherData (for city and subscription's `forecast_period`)
+   - Gets weather data from WeatherData model (for city and subscription's `forecast_period`)
+     - If data not in DB, checks Redis cache as fallback
    - Sends email/webhook based on `notification_type` with forecast for selected period
    - Creates NotificationLog entry
    - Updates `Subscription.last_notified_at`
 
+**Cache Benefits for Notifications:**
+
+- Multiple subscriptions for same city/period share cached data
+- Reduces API calls during hourly notification batch processing
+- Faster notification delivery (cached data is instantly available)
+
 ### Weather Data Flow
 
 1. `fetch_weather_data` task called with `city_id` and optional `forecast_period`
-2. WeatherService fetches from OpenWeatherMap API using city coordinates
+2. **WeatherService with Redis caching**:
+   - **Step 1**: Check Redis cache for `weather:{city_id}:{period}`
+   - **Step 2a**: If cached and not expired → Return cached data (skip API call)
+   - **Step 2b**: If not cached or expired → Continue to Step 3
+3. WeatherService fetches from OpenWeatherMap API using city coordinates
    - For `current`: Uses `/weather` endpoint
    - For `today`, `tomorrow`, `3days`, `week`: Uses `/forecast` endpoint and filters by period
    - For `hourly`: Uses `/forecast/hourly` endpoint
-3. Response parsed and saved to WeatherData model (with `forecast_period` field)
-4. WeatherData cached in database per city and period for quick access
-5. API requests can specify period via query parameter: `/api/weather/{city_id}/?period=tomorrow`
+4. **Response processing**:
+   - Parse API response to our format
+   - Save to Redis cache with TTL based on period (see Caching Strategy)
+   - Save to WeatherData model (with `forecast_period` field) for database persistence
+5. Return weather data to caller
+6. API requests can specify period via query parameter: `/api/weather/{city_id}/?period=tomorrow`
+
+**Cache Benefits:**
+
+- Reduces API calls by 70-90% for frequently accessed cities
+- Faster response times (Redis: ~1ms vs API: ~500ms)
+- Better rate limit management (stays within 60 calls/minute)
+- Improved reliability (works with cached data if API is down)
 
 ### API Request Flow
 
 1. User selects city from navigation (similar to screenshot: Зарічани, Чуднів, Київ, Житомир)
 2. User selects forecast period from navigation (current, today, tomorrow, 3days, week, 10days, 2weeks, month, hourly)
 3. Client requests `/api/weather/{city_id}/?period={period}` (period optional, defaults to `current`)
-4. View checks if WeatherData exists for city and period, and is recent (< 15 minutes)
-5. If recent: Return cached data
-6. If stale/missing: Trigger `fetch_weather_data` task with period, return cached or wait
-7. Frontend displays forecast based on selected period
+4. **View processing with multi-layer caching**:
+   - **Layer 1 (Redis)**: Check Redis cache for `weather:{city_id}:{period}`
+     - If cached and not expired: Return cached data immediately (fastest path, ~1ms)
+   - **Layer 2 (Database)**: If not in Redis, check WeatherData model
+     - If exists and recent (within TTL for period): Return from database, optionally refresh Redis
+   - **Layer 3 (API)**: If not cached anywhere or expired
+     - Trigger `fetch_weather_data` Celery task with period
+     - Task checks Redis → API → saves to Redis + Database
+     - Return fresh data or wait for task completion
+5. Frontend displays forecast based on selected period
+
+**Cache Priority:**
+
+1. Redis (fastest, ~1ms) - First check
+2. Database (fast, ~10ms) - Fallback if Redis miss
+3. API (slowest, ~500ms) - Last resort
+
+**Benefits:**
+
+- Most requests served from Redis (no API calls)
+- Database serves as backup cache layer
+- API calls only when absolutely necessary
+- Significantly reduced API usage (70-90% reduction)
 
 ---
 
@@ -686,30 +803,113 @@ City.objects.get_or_create(
 - Different limits for anon/authenticated
 - Scoped throttling for weather API calls
 
+### Redis Caching
+
+- **Cache key format**: `weather:{city_id}:{forecast_period}`
+- **TTL strategy**: Different TTL based on forecast period freshness
+  - Current weather: 10 minutes (changes frequently)
+  - Short-term (today, tomorrow): 30 minutes
+  - Medium-term (3days, week): 60 minutes
+  - Hourly: 15 minutes
+  - Long-term (10days, 2weeks, month): 120 minutes
+- **Cache workflow**: Always check Redis before API calls
+- **Error handling**: If Redis is unavailable, fallback to database/API
+- **Cache invalidation**: Automatic expiration via TTL (no manual cleanup needed)
+- **Serialization**: Use JSON for cache values (human-readable, easy debugging)
+- **Connection pooling**: Reuse Redis connections for better performance
+- **Monitoring**: Track cache hit/miss rates to optimize TTL values
+
 ### Testing
 
-- Pytest with Factory Boy
+- **Use pytest only** with code coverage checking (pytest-cov)
+  - pytest: Required testing framework
+  - pytest-cov: Required for code coverage reports
+  - pytest-django: Required for Django integration
+- Pytest with Factory Boy for test fixtures
 - AAA pattern (Arrange-Act-Assert)
 - Test file naming (test\_\*.py)
+- Always run tests with coverage: `pytest tests/ --cov=src/app --cov-report=term-missing -v`
+- Aim for 80%+ code coverage
+
+### API Documentation
+
+- **Use drf-spectacular** for automatic OpenAPI 3.0 schema generation
+  - Automatically generates OpenAPI schema from DRF serializers and views
+  - No manual schema writing required
+  - Stays in sync with code automatically
+- **Swagger UI** (included with drf-spectacular):
+  - Interactive API documentation at `/api/schema/swagger-ui/`
+  - Test API endpoints directly from browser
+  - View request/response examples
+  - Try out API calls with authentication
+- **ReDoc** (included with drf-spectacular):
+  - Beautiful alternative documentation at `/api/schema/redoc/`
+  - Clean, readable format
+  - Better for sharing with non-technical users
+- **OpenAPI Schema**:
+  - Available at `/api/schema/` (JSON/YAML)
+  - Can be used with OpenAPI Generator for client code generation
+  - Can be imported into Postman, Insomnia, etc.
+- **Configuration**:
+  - Add `drf_spectacular` to INSTALLED_APPS
+  - Configure SPECTACULAR_SETTINGS
+  - Add schema generation to DRF settings
+  - Include spectacular URLs in project URLs
+
+### CI/CD
+
+- **Use GitLab CI or GitHub Actions** for continuous integration and deployment
+- **GitLab CI**:
+  - Create `.gitlab-ci.yml` in project root
+  - Define stages: test, build, deploy
+  - Run pytest with coverage on every push
+  - Enforce minimum 80% code coverage
+  - Build Docker images and push to registry
+  - Deploy to staging/production environments
+- **GitHub Actions**:
+  - Create `.github/workflows/ci.yml` in project root
+  - Run tests on push and pull requests
+  - Enforce minimum 80% code coverage
+  - Build Docker images and push to registry
+  - Deploy to staging/production environments
+- **CI/CD Features**:
+  - Automated testing on code changes
+  - Code coverage reporting and enforcement
+  - Automated deployment pipelines
+  - Environment-specific configurations
+  - Rollback capabilities
+  - Build notifications
 
 ---
 
 ## Implementation Phases
 
-| Phase          | Days   | Deliverable                                 |
-| -------------- | ------ | ------------------------------------------- |
-| Setup          | 1      | Docker + Django + Celery + Redis            |
-| Models         | 1      | 6 models + migrations                       |
-| Auth           | 2      | JWT authentication + OAuth (Google, GitHub) |
-| Frontend Setup | 1      | Webpack + Tailwind configuration            |
-| Cities         | 1      | City + Weather endpoints                    |
-| Subscriptions  | 1      | Subscription CRUD                           |
-| Celery Tasks   | 2      | Notification pipeline                       |
-| Notifications  | 1      | Email + Webhook                             |
-| Admin          | 1      | Admin panel                                 |
-| Testing        | 2      | 80%+ coverage                               |
-| Deploy         | 2      | Production ready                            |
-| **Total**      | **15** | **MVP**                                     |
+| Phase          | Days   | Deliverable                                        |
+| -------------- | ------ | -------------------------------------------------- |
+| Setup          | 1      | Environment setup, get API keys, Docker (required) |
+| Models         | 1      | 6 models + migrations + fill fake data             |
+| Auth           | 2      | JWT authentication + OAuth (Google, GitHub)        |
+| Frontend Setup | 1      | Webpack + Tailwind configuration                   |
+| Cities         | 1      | City + Weather endpoints (DRF CRUD)                |
+| Subscriptions  | 1      | Subscription CRUD (DRF)                            |
+| Celery Tasks   | 2      | Notification pipeline                              |
+| Notifications  | 1      | Email + Webhook                                    |
+| Admin          | 1      | Admin panel                                        |
+| Testing        | 2      | 80%+ coverage (pytest with pytest-cov)             |
+| Deploy         | 2      | Production ready (Google/Azure optional)           |
+| **Total**      | **15** | **MVP**                                            |
+
+**Key Steps:**
+
+1. Setup environment and get API keys early (OpenWeatherMap, OAuth)
+2. Write base application, models, migrations
+3. Fill fake data into database for testing (management command or fixtures)
+4. Use Django REST Framework for all CRUD operations
+5. Configure API documentation (drf-spectacular + Swagger UI + ReDoc)
+6. Get and store weather data, retrieve via REST API
+7. Write tests using pytest with code coverage checking (pytest-cov)
+8. Set up CI/CD pipeline (GitLab CI or GitHub Actions)
+9. Deploy to server (Docker required, Google/Azure optional)
 
 ---
 
@@ -739,6 +939,9 @@ CELERY_BROKER_URL=redis://redis:6379/1
 WEATHER_API_KEY=your-openweathermap-api-key
 WEATHER_API_URL=https://api.openweathermap.org/data/2.5
 
+# Weather API (Weatherbit.io - Optional alternative)
+WEATHERBIT_API_KEY=your-weatherbit-api-key
+
 # Email
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
@@ -763,7 +966,13 @@ JWT_REFRESH_TOKEN_LIFETIME=7d
 
 ---
 
-## Docker Configuration
+## Docker Configuration (Required)
+
+**Note**: Docker setup is **required** for this project. All services must run in Docker containers.
+
+**Resources:**
+
+- Docker Compose guide: https://docs.docker.com/compose/django/
 
 ### Services
 
@@ -781,6 +990,29 @@ JWT_REFRESH_TOKEN_LIFETIME=7d
 - `node_modules_data`: Node.js dependencies
 - `static_data`: Static files
 - `media_data`: Media files
+
+---
+
+## Deployment Options
+
+### Option 1: Docker Compose on VPS
+
+- Deploy using Docker Compose on any VPS (DigitalOcean, Linode, etc.)
+- Simple and straightforward deployment
+
+### Option 2: Google Cloud Platform (App Engine) - Optional
+
+- Follow guide: https://testdriven.io/blog/django-gae/
+- Configure Cloud SQL for PostgreSQL
+- Configure Cloud Memorystore for Redis
+- Set up Cloud Tasks for Celery
+
+### Option 3: Azure App Service - Optional
+
+- Follow guide: https://testdriven.io/blog/django-azure-app-service/
+- Configure Azure Database for PostgreSQL
+- Configure Azure Cache for Redis
+- Set up Azure Container Instances for Celery workers
 
 ---
 
@@ -805,4 +1037,7 @@ JWT_REFRESH_TOKEN_LIFETIME=7d
 - [ ] Frontend built with Webpack and Tailwind CSS
 - [ ] django-debug-toolbar configured (dev only)
 - [ ] 80%+ test coverage
+- [ ] CI/CD pipeline configured (GitLab CI or GitHub Actions)
+- [ ] Automated testing on code changes
+- [ ] Code coverage enforcement in CI/CD
 - [ ] Deployed to production

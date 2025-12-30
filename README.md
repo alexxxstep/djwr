@@ -151,12 +151,14 @@ docker-compose exec web python manage.py migrate
 For detailed documentation, architecture overview, data models, API specifications, and implementation details, see:
 
 📖 **[Full Implementation Plan](docs/WEATHER_REMINDER_PLAN.md)**
+🌤️ **[OpenWeatherMap API Guide](docs/OPENWEATHERMAP_API_GUIDE.md)**
 
 The documentation includes:
 
 - Complete architecture overview
 - Database schema and ER diagrams
 - API endpoint specifications
+- **OpenWeatherMap API integration guide** (registration, endpoints, error handling)
 - Celery task definitions
 - Service layer architecture
 - Component interaction flows
