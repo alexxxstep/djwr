@@ -1,0 +1,266 @@
+<mxfile host="65bd71144e">
+    <diagram name="WeatherReminder Models" id="weather-reminder">
+        <mxGraphModel dx="479" dy="503" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1000" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="user" value="User" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#1565C0;fontColor=#ffffff;strokeColor=#003c8f;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="40" width="240" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="user-fields" value="+ email: EmailField &lt;unique, USERNAME_FIELD&gt;&#10;+ is_email_verified: BooleanField&#10;+ webhook_url: URLField &lt;nullable&gt;" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" parent="user" vertex="1">
+                    <mxGeometry y="30" width="240" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="user-line" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;" parent="user" vertex="1">
+                    <mxGeometry y="90" width="240" height="8" as="geometry"/>
+                </mxCell>
+                <mxCell id="user-methods" value="+ __str__(): str" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" parent="user" vertex="1">
+                    <mxGeometry y="98" width="240" height="42" as="geometry"/>
+                </mxCell>
+                <mxCell id="city" value="City" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#2E7D32;fontColor=#ffffff;strokeColor=#1B5E20;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="40" width="240" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="city-fields" value="+ name: CharField(100)&#10;+ country: CharField(100)&#10;+ latitude: DecimalField(9,6)&#10;+ longitude: DecimalField(9,6)" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" parent="city" vertex="1">
+                    <mxGeometry y="30" width="240" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="city-line" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;" parent="city" vertex="1">
+                    <mxGeometry y="100" width="240" height="8" as="geometry"/>
+                </mxCell>
+                <mxCell id="city-methods" value="+ __str__(): str&#10;+ Meta: unique_together=[name, country]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" parent="city" vertex="1">
+                    <mxGeometry y="108" width="240" height="32" as="geometry"/>
+                </mxCell>
+                <mxCell id="subscription" value="Subscription" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#C62828;fontColor=#ffffff;strokeColor=#8E0000;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="220" width="280" height="220" as="geometry"/>
+                </mxCell>
+                <mxCell id="subscription-fields" value="+ user: FK → User&#10;+ city: FK → City&#10;+ period: IntegerField [1h, 3h, 6h, 12h]&#10;+ forecast_period: CharField [current, today, tomorrow, 3days, week]&#10;+ notification_type: CharField [email, webhook, both]&#10;+ is_active: BooleanField&#10;+ last_notified_at: DateTimeField &lt;null&gt;" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" parent="subscription" vertex="1">
+                    <mxGeometry y="30" width="280" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="subscription-line" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;" parent="subscription" vertex="1">
+                    <mxGeometry y="170" width="280" height="8" as="geometry"/>
+                </mxCell>
+                <mxCell id="subscription-methods" value="+ __str__(): str&#10;+ is_due_for_notification(): bool&#10;+ Meta: unique_together=[user, city]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" parent="subscription" vertex="1">
+                    <mxGeometry y="178" width="280" height="42" as="geometry"/>
+                </mxCell>
+                <mxCell id="weatherdata" value="WeatherData" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#F57C00;fontColor=#ffffff;strokeColor=#E65100;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="220" width="260" height="220" as="geometry"/>
+                </mxCell>
+                <mxCell id="weatherdata-fields" value="+ city: FK → City&#10;+ forecast_period: CharField [current, today, tomorrow, 3days, week, hourly]&#10;+ temperature: DecimalField&#10;+ feels_like: DecimalField&#10;+ humidity: IntegerField&#10;+ pressure: IntegerField&#10;+ wind_speed: DecimalField&#10;+ description: CharField&#10;+ icon: CharField&#10;+ fetched_at: DateTimeField" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" parent="weatherdata" vertex="1">
+                    <mxGeometry y="30" width="260" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="weatherdata-line" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;" parent="weatherdata" vertex="1">
+                    <mxGeometry y="170" width="260" height="8" as="geometry"/>
+                </mxCell>
+                <mxCell id="weatherdata-methods" value="+ __str__(): str&#10;+ Meta: unique_together=[city, forecast_period]&#10;+ Meta: ordering=[-fetched_at]" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" parent="weatherdata" vertex="1">
+                    <mxGeometry y="178" width="260" height="42" as="geometry"/>
+                </mxCell>
+                <mxCell id="notificationlog" value="NotificationLog" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#7B1FA2;fontColor=#ffffff;strokeColor=#4A148C;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="480" width="280" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="notificationlog-fields" value="+ subscription: FK → Subscription&#10;+ weather_data: FK → WeatherData &lt;null&gt;&#10;+ notification_type: CharField [email, webhook]&#10;+ status: CharField [pending, sent, failed]&#10;+ error_message: TextField &lt;blank&gt;&#10;+ sent_at: DateTimeField &lt;null&gt;" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" parent="notificationlog" vertex="1">
+                    <mxGeometry y="30" width="280" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="notificationlog-line" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;" parent="notificationlog" vertex="1">
+                    <mxGeometry y="130" width="280" height="8" as="geometry"/>
+                </mxCell>
+                <mxCell id="notificationlog-methods" value="+ __str__(): str" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" parent="notificationlog" vertex="1">
+                    <mxGeometry y="138" width="280" height="42" as="geometry"/>
+                </mxCell>
+                <mxCell id="basemodel" value="«abstract»&#10;BaseModel" style="swimlane;fontStyle=3;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#546E7A;fontColor=#ffffff;strokeColor=#37474F;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="700" y="40" width="220" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="basemodel-fields" value="+ created_at: DateTimeField&#10;+ updated_at: DateTimeField" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" parent="basemodel" vertex="1">
+                    <mxGeometry y="40" width="220" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="basemodel-line" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;" parent="basemodel" vertex="1">
+                    <mxGeometry y="90" width="220" height="8" as="geometry"/>
+                </mxCell>
+                <mxCell id="basemodel-methods" value="Meta: abstract = True" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" parent="basemodel" vertex="1">
+                    <mxGeometry y="98" width="220" height="22" as="geometry"/>
+                </mxCell>
+                <mxCell id="weather-service" value="«service»&#10;WeatherService" style="swimlane;fontStyle=3;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#00838F;fontColor=#ffffff;strokeColor=#006064;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="700" y="200" width="260" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="weather-service-fields" value="- api_key: str&#10;- base_url: str" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" parent="weather-service" vertex="1">
+                    <mxGeometry y="40" width="260" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="weather-service-line" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;" parent="weather-service" vertex="1">
+                    <mxGeometry y="80" width="260" height="8" as="geometry"/>
+                </mxCell>
+                <mxCell id="weather-service-methods" value="+ fetch_current_weather(city): dict&#10;- _parse_response(data): dict" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" parent="weather-service" vertex="1">
+                    <mxGeometry y="88" width="260" height="52" as="geometry"/>
+                </mxCell>
+                <mxCell id="notification-service" value="«service»&#10;NotificationService" style="swimlane;fontStyle=3;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#00838F;fontColor=#ffffff;strokeColor=#006064;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="700" y="380" width="260" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="notification-service-line" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;" parent="notification-service" vertex="1">
+                    <mxGeometry y="40" width="260" height="8" as="geometry"/>
+                </mxCell>
+                <mxCell id="notification-service-methods" value="+ send_email(user, weather): bool&#10;+ send_webhook(user, weather): bool&#10;- _format_weather_message(w): str&#10;- _format_html_message(w): str" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=12;" parent="notification-service" vertex="1">
+                    <mxGeometry y="48" width="260" height="112" as="geometry"/>
+                </mxCell>
+                <mxCell id="celery-tasks" value="«celery tasks»&#10;Tasks" style="swimlane;fontStyle=3;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=40;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;fillColor=#D84315;fontColor=#ffffff;strokeColor=#BF360C;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="700" y="580" width="260" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="celery-tasks-line" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;" parent="celery-tasks" vertex="1">
+                    <mxGeometry y="40" width="260" height="8" as="geometry"/>
+                </mxCell>
+                <mxCell id="celery-tasks-methods" value="@shared_task&#10;+ fetch_weather_data(city_id): dict&#10;&#10;@shared_task&#10;+ send_notification(subscription_id)&#10;&#10;@shared_task (periodic, hourly)&#10;+ process_notifications()&#10;&#10;@shared_task (periodic, daily)&#10;+ cleanup_old_data()" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=6;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;fontSize=11;" parent="celery-tasks" vertex="1">
+                    <mxGeometry y="48" width="260" height="132" as="geometry"/>
+                </mxCell>
+                <mxCell id="rel-user-subscription" value="" style="endArrow=none;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="user" target="subscription" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="rel-user-subscription-label1" value="1" style="edgeLabel;resizable=0;html=1;align=left;verticalAlign=bottom;" parent="rel-user-subscription" connectable="0" vertex="1">
+                    <mxGeometry x="-1" relative="1" as="geometry">
+                        <mxPoint x="10" y="-5" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="rel-user-subscription-label2" value="*" style="edgeLabel;resizable=0;html=1;align=right;verticalAlign=bottom;" parent="rel-user-subscription" connectable="0" vertex="1">
+                    <mxGeometry x="1" relative="1" as="geometry">
+                        <mxPoint x="10" y="5" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="rel-user-subscription-text" value="subscribes" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="rel-user-subscription" vertex="1" connectable="0">
+                    <mxGeometry x="-0.1" y="1" relative="1" as="geometry">
+                        <mxPoint x="30" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="rel-city-subscription" value="" style="endArrow=none;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.3;entryDx=0;entryDy=0;" parent="1" source="city" target="subscription" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="360" y="180"/>
+                            <mxPoint x="360" y="324"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="rel-city-subscription-label1" value="1" style="edgeLabel;resizable=0;html=1;align=left;verticalAlign=bottom;" parent="rel-city-subscription" connectable="0" vertex="1">
+                    <mxGeometry x="-1" relative="1" as="geometry">
+                        <mxPoint x="10" y="-10" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="rel-city-subscription-label2" value="*" style="edgeLabel;resizable=0;html=1;align=right;verticalAlign=bottom;" parent="rel-city-subscription" connectable="0" vertex="1">
+                    <mxGeometry x="1" relative="1" as="geometry">
+                        <mxPoint x="-10" y="5" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="rel-city-weather" value="" style="endArrow=none;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="city" target="weatherdata" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="rel-city-weather-label1" value="1" style="edgeLabel;resizable=0;html=1;align=left;verticalAlign=bottom;" parent="rel-city-weather" connectable="0" vertex="1">
+                    <mxGeometry x="-1" relative="1" as="geometry">
+                        <mxPoint x="10" y="-5" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="rel-city-weather-label2" value="*" style="edgeLabel;resizable=0;html=1;align=right;verticalAlign=bottom;" parent="rel-city-weather" connectable="0" vertex="1">
+                    <mxGeometry x="1" relative="1" as="geometry">
+                        <mxPoint x="10" y="5" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="rel-city-weather-text" value="has weather" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="rel-city-weather" vertex="1" connectable="0">
+                    <mxGeometry x="-0.1" y="1" relative="1" as="geometry">
+                        <mxPoint x="40" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="rel-subscription-log" value="" style="endArrow=none;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="subscription" target="notificationlog" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="rel-subscription-log-label1" value="1" style="edgeLabel;resizable=0;html=1;align=left;verticalAlign=bottom;" parent="rel-subscription-log" connectable="0" vertex="1">
+                    <mxGeometry x="-1" relative="1" as="geometry">
+                        <mxPoint x="10" y="-5" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="rel-subscription-log-label2" value="*" style="edgeLabel;resizable=0;html=1;align=right;verticalAlign=bottom;" parent="rel-subscription-log" connectable="0" vertex="1">
+                    <mxGeometry x="1" relative="1" as="geometry">
+                        <mxPoint x="10" y="5" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="rel-subscription-log-text" value="logs" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="rel-subscription-log" vertex="1" connectable="0">
+                    <mxGeometry x="-0.1" y="1" relative="1" as="geometry">
+                        <mxPoint x="25" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="rel-weather-log" value="" style="endArrow=none;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;dashed=1;exitX=0;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="weatherdata" target="notificationlog" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="380" y="440"/>
+                            <mxPoint x="380" y="550"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="rel-weather-log-label1" value="0..1" style="edgeLabel;resizable=0;html=1;align=left;verticalAlign=bottom;" parent="rel-weather-log" connectable="0" vertex="1">
+                    <mxGeometry x="-1" relative="1" as="geometry">
+                        <mxPoint x="10" y="-10" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="rel-weather-log-label2" value="*" style="edgeLabel;resizable=0;html=1;align=right;verticalAlign=bottom;" parent="rel-weather-log" connectable="0" vertex="1">
+                    <mxGeometry x="1" relative="1" as="geometry">
+                        <mxPoint x="-10" y="5" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="inherit-city" value="" style="endArrow=block;endSize=16;endFill=0;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="city" target="basemodel" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="inherit-subscription" value="" style="endArrow=block;endSize=16;endFill=0;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="subscription" target="basemodel">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="360" y="320"/>
+                            <mxPoint x="640" y="320"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="inherit-weatherdata" value="" style="endArrow=block;endSize=16;endFill=0;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="weatherdata" target="basemodel">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="680" y="320"/>
+                            <mxPoint x="680" y="100"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="inherit-notificationlog" value="" style="endArrow=block;endSize=16;endFill=0;html=1;edgeStyle=orthogonalEdgeStyle;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="notificationlog" target="basemodel">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="360" y="570"/>
+                            <mxPoint x="640" y="570"/>
+                            <mxPoint x="640" y="100"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="note-user" value="AbstractUser&#10;USERNAME_FIELD = email&#10;JWT (API) + OAuth&#10;(Google, GitHub)" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#FFF9C4;size=14;fontColor=#333333;strokeColor=#F9A825;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="40" width="160" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="note-subscription" value="Notification Periods:&#10;1h, 3h, 6h, 12h&#10;&#10;Forecast Periods:&#10;current, today, tomorrow,&#10;3days, week&#10;&#10;Types: email, webhook, both" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#FFF9C4;size=14;fontColor=#333333;strokeColor=#F9A825;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="130" width="160" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="note-celery" value="Celery Beat Schedule:&#10;- process_notifications&#10;  (every hour at :00)&#10;- cleanup_old_data&#10;  (daily at 3:00 AM)" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#FFF9C4;size=14;fontColor=#333333;strokeColor=#F9A825;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="580" width="160" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="note-services" value="Services follow&#10;Single Responsibility&#10;Principle (SRP)&#10;&#10;Business logic&#10;separation" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#FFF9C4;size=14;fontColor=#333333;strokeColor=#F9A825;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="280" width="160" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="title" value="DjangoWeatherReminder - UML Class Diagram" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=18;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="400" y="800" width="400" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-title" value="Legend:" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="720" width="60" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-model" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1565C0;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="745" width="20" height="15" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-model-text" value="Models" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1025" y="742" width="60" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-service" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#00838F;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="765" width="20" height="15" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-service-text" value="Services" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1025" y="762" width="60" height="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-task" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#D84315;" parent="1" vertex="1">
+                    <mxGeometry x="1000" y="785" width="20" height="15" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend-task-text" value="Celery Tasks" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="1025" y="782" width="80" height="20" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
