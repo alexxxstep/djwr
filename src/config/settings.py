@@ -3,9 +3,11 @@ Django settings for DjangoWeatherReminder project.
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
-from dotenv import load_dotenv
+
 import dj_database_url
+from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
@@ -45,7 +47,15 @@ INSTALLED_APPS = [
 
 # Conditionally add debug_toolbar in development
 if DEBUG:
-    INSTALLED_APPS.append("debug_toolbar")
+    try:
+        import debug_toolbar  # noqa: F401
+
+        INSTALLED_APPS.append("debug_toolbar")
+    except ImportError:
+        pass  # debug_toolbar not installed
+
+# Custom User Model
+AUTH_USER_MODEL = "app.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -53,6 +63,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -180,7 +191,7 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-o Additional directories for static files (for frontend build output)
+# Additional directories for static files (for frontend build output)
 STATICFILES_DIRS = (
     [
         BASE_DIR / "frontend" / "dist",
@@ -216,8 +227,6 @@ REST_FRAMEWORK = {
 }
 
 # JWT Settings (Simple JWT)
-from datetime import timedelta
-
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(
         seconds=int(os.environ.get("JWT_ACCESS_TOKEN_LIFETIME", 900))
@@ -274,9 +283,13 @@ SOCIALACCOUNT_PROVIDERS = {
 }
 
 # OAuth Settings
-ACCOUNT_EMAIL_REQUIRED = True
-ACCOUNT_USERNAME_REQUIRED = False
-ACCOUNT_AUTHENTICATION_METHOD = "email"
+# Django-allauth settings (updated to new API)
+ACCOUNT_LOGIN_METHODS = {"email"}  # Use email for login
+ACCOUNT_SIGNUP_FIELDS = [
+    "email*",
+    "password1*",
+    "password2*",
+]  # Required fields for signup
 ACCOUNT_EMAIL_VERIFICATION = "optional"  # Will be set to "mandatory" in production
 SOCIALACCOUNT_AUTO_SIGNUP = True
 SOCIALACCOUNT_EMAIL_REQUIRED = True

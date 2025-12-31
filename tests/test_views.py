@@ -14,4 +14,3 @@ View tests will be added in Phase 3 and later phases.
 #             "password": "testpass123",
 #         })
 #         assert response.status_code == status.HTTP_201_CREATED
-

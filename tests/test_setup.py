@@ -24,4 +24,3 @@ def test_database_access(db):
         cursor.execute("SELECT 1")
         result = cursor.fetchone()
         assert result[0] == 1
-
