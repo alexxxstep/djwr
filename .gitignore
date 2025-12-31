@@ -69,6 +69,6 @@ package-lock.json
 .yamllint
 
 
-
+celerybeat-schedule.*
 
 
