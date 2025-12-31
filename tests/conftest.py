@@ -1,8 +1,8 @@
 """
 Pytest configuration and shared fixtures for DjangoWeatherReminder tests.
 """
+
 import pytest
-from django.conf import settings
 from django.test import RequestFactory
 
 # Configure Django settings for tests
@@ -54,4 +54,3 @@ def api_client():
 #     from app.models import User
 #     from tests.factories import UserFactory
 #     return UserFactory()
-

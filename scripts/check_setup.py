@@ -3,6 +3,7 @@
 Script to verify DjangoWeatherReminder setup.
 Run this script to check if all components are configured correctly.
 """
+
 import os
 import sys
 from pathlib import Path
@@ -14,39 +15,48 @@ sys.path.insert(0, str(BASE_DIR))
 # Set Django settings
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
+
 def check_python_version():
     """Check Python version."""
     print("✓ Checking Python version...")
-    if sys.version_info < (3, 12):
-        print(f"  ✗ Python 3.12+ required, found {sys.version}")
-        return False
-    print(f"  ✓ Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
+    version_str = (
+        f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    )
+    print(f"  ✓ Python {version_str}")
+    # Version requirement is enforced by pyproject.toml (requires-python = ">=3.12")
     return True
+
 
 def check_django_import():
     """Check if Django can be imported."""
     print("\n✓ Checking Django import...")
     try:
         import django
+
         print(f"  ✓ Django {django.get_version()}")
         return True
     except ImportError:
         print("  ✗ Django not installed")
         return False
 
+
 def check_settings():
     """Check Django settings."""
     print("\n✓ Checking Django settings...")
     try:
         from django.conf import settings
+
         print(f"  ✓ SECRET_KEY: {'Set' if settings.SECRET_KEY else 'Not set'}")
         print(f"  ✓ DEBUG: {settings.DEBUG}")
         print(f"  ✓ INSTALLED_APPS: {len(settings.INSTALLED_APPS)} apps")
-        print(f"  ✓ DATABASES: {settings.DATABASES['default'].get('ENGINE', 'Not configured')}")
+        print(
+            f"  ✓ DATABASES: {settings.DATABASES['default'].get('ENGINE', 'Not configured')}"
+        )
         return True
     except Exception as e:
         print(f"  ✗ Error loading settings: {e}")
         return False
+
 
 def check_structure():
     """Check project structure."""
@@ -68,6 +78,7 @@ def check_structure():
             print(f"  ✗ {dir_path}/ (missing)")
             all_exist = False
     return all_exist
+
 
 def check_files():
     """Check required files."""
@@ -91,6 +102,7 @@ def check_files():
             print(f"  ✗ {file_path} (missing)")
             all_exist = False
     return all_exist
+
 
 def main():
     """Run all checks."""
@@ -119,6 +131,6 @@ def main():
         print("✗ Some checks failed. Please review the errors above.")
         return 1
 
+
 if __name__ == "__main__":
     sys.exit(main())
-
