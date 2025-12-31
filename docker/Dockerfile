@@ -31,7 +31,8 @@ RUN uv pip install --system \
     "django>=5.0.0,<6.0.0" \
     "djangorestframework>=3.15.0" \
     "djangorestframework-simplejwt>=5.3.0" \
-    "django-allauth>=0.57.0" \
+    "drf-spectacular>=0.27.0" \
+    "social-auth-app-django>=5.4.0" \
     "celery>=5.3.0" \
     "celery[redis]>=5.3.0" \
     "redis>=5.0.0" \

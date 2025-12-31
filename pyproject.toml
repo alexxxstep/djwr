@@ -54,8 +54,11 @@ dependencies = [
     # JWT Authentication
     "djangorestframework-simplejwt>=5.3.0",
 
+    # API Documentation
+    "drf-spectacular>=0.27.0",  # OpenAPI 3.0 schema generation
+
     # OAuth Authentication
-    "django-allauth>=0.57.0",
+    "social-auth-app-django>=5.4.0",
 
     # Celery for background tasks
     "celery>=5.3.0",
@@ -73,9 +76,9 @@ dependencies = [
 
     # Environment variables
     "python-dotenv>=1.0.0",
-    # HTTP requests (required by django-allauth OAuth providers)
+    # HTTP requests (for OpenWeatherMap API and other external services)
     "requests>=2.31.0",
-    # Cryptography (required by django-allauth for OAuth JWT)
+    # Cryptography (for JWT RS256 algorithm and other security features)
     "cryptography>=41.0.0",
 ]
 

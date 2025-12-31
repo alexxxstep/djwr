@@ -36,11 +36,9 @@ INSTALLED_APPS = [
     # Third-party apps
     "rest_framework",
     "rest_framework_simplejwt",
-    "allauth",
-    "allauth.account",
-    "allauth.socialaccount",
-    "allauth.socialaccount.providers.google",
-    "allauth.socialaccount.providers.github",
+    "rest_framework_simplejwt.token_blacklist",  # Token blacklist for logout
+    "drf_spectacular",  # OpenAPI 3.0 schema generation
+    "social_django",  # OAuth authentication
     # Local apps
     "app",
 ]
@@ -63,7 +61,6 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "allauth.account.middleware.AccountMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -224,6 +221,43 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+# API Documentation (drf-spectacular)
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Django Weather Reminder API",
+    "DESCRIPTION": (
+        "API for managing weather subscriptions and notifications. "
+        "Users can subscribe to weather updates for cities and receive "
+        "notifications via email or webhook."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,  # Better request/response separation
+    "SCHEMA_PATH_PREFIX": "/api/",
+    "TAGS": [
+        {
+            "name": "Authentication",
+            "description": "User registration and authentication",
+        },
+        {"name": "Cities", "description": "City management and search"},
+        {"name": "Subscriptions", "description": "Weather subscription management"},
+        {"name": "Weather", "description": "Weather data retrieval"},
+        {"name": "Notifications", "description": "Notification management"},
+    ],
+    "SECURITY": [
+        {
+            "bearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+            }
+        }
+    ],
+    "AUTHENTICATION_WHITELIST": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
 }
 
 # JWT Settings (Simple JWT)
@@ -255,44 +289,54 @@ DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL", "noreply@weatherreminder.local"
 )
 
-# OAuth Configuration (django-allauth)
-SOCIALACCOUNT_PROVIDERS = {
-    "google": {
-        "SCOPE": [
-            "profile",
-            "email",
-        ],
-        "AUTH_PARAMS": {
-            "access_type": "online",
-        },
-        "APP": {
-            "client_id": os.environ.get("SOCIAL_AUTH_GOOGLE_OAUTH2_KEY", ""),
-            "secret": os.environ.get("SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET", ""),
-            "key": "",
-        },
-    },
-    "github": {
-        "SCOPE": [
-            "user:email",
-        ],
-        "APP": {
-            "client_id": os.environ.get("SOCIAL_AUTH_GITHUB_KEY", ""),
-            "secret": os.environ.get("SOCIAL_AUTH_GITHUB_SECRET", ""),
-        },
-    },
-}
+# OAuth Configuration (social-auth-app-django)
+AUTHENTICATION_BACKENDS = (
+    "social_core.backends.google.GoogleOAuth2",
+    "social_core.backends.github.GithubOAuth2",
+    "django.contrib.auth.backends.ModelBackend",  # Email/password auth
+)
+
+# Google OAuth2
+SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = os.environ.get("SOCIAL_AUTH_GOOGLE_OAUTH2_KEY", "")
+SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = os.environ.get(
+    "SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET", ""
+)
+SOCIAL_AUTH_GOOGLE_OAUTH2_SCOPE = ["profile", "email"]
+SOCIAL_AUTH_GOOGLE_OAUTH2_AUTH_PARAMS = {"access_type": "online"}
+
+# GitHub OAuth2
+SOCIAL_AUTH_GITHUB_KEY = os.environ.get("SOCIAL_AUTH_GITHUB_KEY", "")
+SOCIAL_AUTH_GITHUB_SECRET = os.environ.get("SOCIAL_AUTH_GITHUB_SECRET", "")
+SOCIAL_AUTH_GITHUB_SCOPE = ["user:email"]
 
 # OAuth Settings
-# Django-allauth settings (updated to new API)
-ACCOUNT_LOGIN_METHODS = {"email"}  # Use email for login
-ACCOUNT_SIGNUP_FIELDS = [
-    "email*",
-    "password1*",
-    "password2*",
-]  # Required fields for signup
-ACCOUNT_EMAIL_VERIFICATION = "optional"  # Will be set to "mandatory" in production
-SOCIALACCOUNT_AUTO_SIGNUP = True
-SOCIALACCOUNT_EMAIL_REQUIRED = True
+SOCIAL_AUTH_USER_MODEL = "app.User"
+SOCIAL_AUTH_USERNAME_IS_FULL_EMAIL = True
+SOCIAL_AUTH_EMAIL_VALIDATION_FUNCTION = None
+SOCIAL_AUTH_EMAIL_VALIDATION_URL = None
+
+# OAuth Pipeline
+SOCIAL_AUTH_PIPELINE = (
+    "social_core.pipeline.social_auth.social_details",
+    "social_core.pipeline.social_auth.social_uid",
+    "social_core.pipeline.social_auth.auth_allowed",
+    "social_core.pipeline.social_auth.social_user",
+    "social_core.pipeline.user.get_username",
+    "social_core.pipeline.user.create_user",
+    "social_core.pipeline.social_auth.associate_user",
+    "social_core.pipeline.social_auth.load_extra_data",
+    "social_core.pipeline.user.user_details",
+)
+
+# OAuth Redirect URLs
+SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI = os.environ.get(
+    "SOCIAL_AUTH_GOOGLE_OAUTH2_REDIRECT_URI",
+    "http://localhost:8000/complete/google-oauth2/",
+)
+SOCIAL_AUTH_GITHUB_REDIRECT_URI = os.environ.get(
+    "SOCIAL_AUTH_GITHUB_REDIRECT_URI",
+    "http://localhost:8000/complete/github/",
+)
 
 # Weather API Configuration
 WEATHER_API_KEY = os.environ.get("WEATHER_API_KEY", "")
