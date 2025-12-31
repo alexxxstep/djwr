@@ -2,8 +2,8 @@
 Factory Boy factories for creating test data.
 """
 
-from decimal import Decimal
 import random
+from decimal import Decimal
 
 import factory
 from django.utils import timezone

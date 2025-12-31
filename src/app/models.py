@@ -219,7 +219,7 @@ class WeatherData(BaseModel):
         ]
 
     def __str__(self):
-        return f"{self.city.name} - {self.forecast_period} - " f"{self.temperature}°C"
+        return f"{self.city.name} - {self.forecast_period} - {self.temperature}°C"
 
 
 class NotificationLog(BaseModel):
@@ -276,4 +276,4 @@ class NotificationLog(BaseModel):
         ]
 
     def __str__(self):
-        return f"{self.subscription} - {self.notification_type} - " f"{self.status}"
+        return f"{self.subscription} - {self.notification_type} - {self.status}"

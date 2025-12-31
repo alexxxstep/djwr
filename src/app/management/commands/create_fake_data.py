@@ -2,8 +2,8 @@
 Django management command to create fake data for testing.
 """
 
-from decimal import Decimal
 import random
+from decimal import Decimal
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -62,31 +62,23 @@ class Command(BaseCommand):
         # Create users
         self.stdout.write(f"Creating {num_users} users...")
         users = self._create_users(num_users)
-        self.stdout.write(
-            self.style.SUCCESS(f"✓ Created {len(users)} users")
-        )
+        self.stdout.write(self.style.SUCCESS(f"✓ Created {len(users)} users"))
 
         # Create cities
         self.stdout.write(f"Creating {num_cities} cities...")
         cities = self._create_cities(num_cities)
-        self.stdout.write(
-            self.style.SUCCESS(f"✓ Created {len(cities)} cities")
-        )
+        self.stdout.write(self.style.SUCCESS(f"✓ Created {len(cities)} cities"))
 
         # Create subscriptions
         self.stdout.write(f"Creating {num_subscriptions} subscriptions...")
-        subscriptions = self._create_subscriptions(
-            users, cities, num_subscriptions
-        )
+        subscriptions = self._create_subscriptions(users, cities, num_subscriptions)
         self.stdout.write(
             self.style.SUCCESS(f"✓ Created {len(subscriptions)} subscriptions")
         )
 
         # Create weather data
         self.stdout.write(f"Creating {num_weather_data} weather data entries...")
-        weather_data_list = self._create_weather_data(
-            cities, num_weather_data
-        )
+        weather_data_list = self._create_weather_data(cities, num_weather_data)
         self.stdout.write(
             self.style.SUCCESS(
                 f"✓ Created {len(weather_data_list)} weather data entries"
@@ -117,8 +109,8 @@ class Command(BaseCommand):
         """Create fake users."""
         users = []
         for i in range(count):
-            email = f"user{i+1}@example.com"
-            username = f"user{i+1}"
+            email = f"user{i + 1}@example.com"
+            username = f"user{i + 1}"
             user = User.objects.create_user(
                 email=email,
                 username=username,
@@ -161,7 +153,7 @@ class Command(BaseCommand):
         ]
 
         cities = []
-        for i, (name, country, lat, lon) in enumerate(cities_data[:count]):
+        for name, country, lat, lon in cities_data[:count]:
             city, created = City.objects.get_or_create(
                 name=name,
                 country=country,
@@ -230,17 +222,11 @@ class Command(BaseCommand):
                 city=city,
                 forecast_period=forecast_period,
                 defaults={
-                    "temperature": Decimal(
-                        str(round(random.uniform(-30, 40), 2))
-                    ),
-                    "feels_like": Decimal(
-                        str(round(random.uniform(-30, 40), 2))
-                    ),
+                    "temperature": Decimal(str(round(random.uniform(-30, 40), 2))),
+                    "feels_like": Decimal(str(round(random.uniform(-30, 40), 2))),
                     "humidity": random.randint(0, 100),
                     "pressure": random.randint(950, 1050),
-                    "wind_speed": Decimal(
-                        str(round(random.uniform(0, 30), 2))
-                    ),
+                    "wind_speed": Decimal(str(round(random.uniform(0, 30), 2))),
                     "wind_deg": random.randint(0, 360),
                     "visibility": random.randint(1000, 10000),
                     "clouds": random.randint(0, 100),
@@ -254,9 +240,7 @@ class Command(BaseCommand):
                 weather_data_list.append(weather_data)
         return weather_data_list
 
-    def _create_notification_logs(
-        self, subscriptions, weather_data_list, count
-    ):
+    def _create_notification_logs(self, subscriptions, weather_data_list, count):
         """Create fake notification logs."""
         logs = []
         notification_types = ["email", "webhook"]
@@ -272,9 +256,7 @@ class Command(BaseCommand):
         for _ in range(count):
             subscription = random.choice(subscriptions)
             weather_data = (
-                random.choice(weather_data_list)
-                if weather_data_list
-                else None
+                random.choice(weather_data_list) if weather_data_list else None
             )
             notification_type = random.choice(notification_types)
             status = random.choice(statuses)
@@ -285,17 +267,13 @@ class Command(BaseCommand):
                 notification_type=notification_type,
                 status=status,
                 error_message=(
-                    random.choice(error_messages)
-                    if status == "failed"
-                    else ""
+                    random.choice(error_messages) if status == "failed" else ""
                 ),
                 sent_at=(
-                    timezone.now()
-                    - timezone.timedelta(hours=random.randint(0, 48))
+                    timezone.now() - timezone.timedelta(hours=random.randint(0, 48))
                     if status == "sent"
                     else None
                 ),
             )
             logs.append(log)
         return logs
-

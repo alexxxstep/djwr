@@ -5,12 +5,11 @@ Tests for Django models.
 from decimal import Decimal
 
 import pytest
-from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.utils import timezone
 from freezegun import freeze_time
 
-from app.models import City, NotificationLog, Subscription, User, WeatherData
+from app.models import User, WeatherData
 
 
 class TestUser:
@@ -91,7 +90,7 @@ class TestSubscription:
 
     def test_subscription_unique_together(self, db):
         """Test that (user, city) must be unique."""
-        from tests.factories import SubscriptionFactory, UserFactory, CityFactory
+        from tests.factories import CityFactory, SubscriptionFactory, UserFactory
 
         user = UserFactory()
         city = CityFactory()
@@ -163,7 +162,7 @@ class TestWeatherData:
     def test_weather_data_unique_together(self, db):
         """Test that (city, forecast_period) must be unique."""
         from app.models import WeatherData
-        from tests.factories import WeatherDataFactory, CityFactory
+        from tests.factories import CityFactory, WeatherDataFactory
 
         city = CityFactory()
         WeatherDataFactory(city=city, forecast_period="current")
@@ -188,15 +187,12 @@ class TestWeatherData:
         from tests.factories import WeatherDataFactory
 
         # Create weather data with different fetched_at times
-        old_data = WeatherDataFactory(
-            fetched_at=timezone.now() - timezone.timedelta(hours=2)
-        )
-        new_data = WeatherDataFactory(
-            fetched_at=timezone.now() - timezone.timedelta(hours=1)
-        )
+        WeatherDataFactory(fetched_at=timezone.now() - timezone.timedelta(hours=2))
+        WeatherDataFactory(fetched_at=timezone.now() - timezone.timedelta(hours=1))
 
         # Query should return newest first
         all_data = list(WeatherData.objects.all())
+        assert len(all_data) >= 2
         assert all_data[0].fetched_at > all_data[1].fetched_at
 
 
@@ -208,9 +204,7 @@ class TestNotificationLog:
         from tests.factories import NotificationLogFactory
 
         log = NotificationLogFactory()
-        expected = (
-            f"{log.subscription} - {log.notification_type} - " f"{log.status}"
-        )
+        expected = f"{log.subscription} - {log.notification_type} - {log.status}"
         assert str(log) == expected
 
     def test_notification_log_relationships(self, db):
