@@ -5,6 +5,7 @@ URL configuration for DjangoWeatherReminder project.
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.shortcuts import render
 from django.urls import include, path
 from drf_spectacular.views import (
     SpectacularAPIView,
@@ -15,6 +16,12 @@ from drf_spectacular.views import (
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("app.urls")),
+    # Frontend test page
+    path(
+        "test-frontend/",
+        lambda request: render(request, "test_frontend.html"),
+        name="test_frontend",
+    ),
     # API Documentation
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Django Weather Reminder{% endblock %}</title>
+    {% load static %}
+    <script src="{% static 'bundle.js' %}"></script>
+  </head>
+  <body class="bg-gray-100 min-h-screen">
+    <nav class="bg-white shadow-lg">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16">
+          <div class="flex items-center">
+            <a href="/" class="text-xl font-bold text-blue-600">
+              Django Weather Reminder
+            </a>
+          </div>
+          <div class="flex items-center space-x-4">
+            {% if user.is_authenticated %}
+            <span class="text-gray-700">Hello, {{ user.email }}</span>
+            <a
+              href="/api/auth/logout/"
+              class="text-blue-600 hover:text-blue-800"
+              >Logout</a
+            >
+            {% else %}
+            <a href="/api/auth/login/" class="text-blue-600 hover:text-blue-800"
+              >Login</a
+            >
+            <a
+              href="/api/auth/register/"
+              class="text-blue-600 hover:text-blue-800"
+              >Register</a
+            >
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      {% if messages %}
+      <div class="mb-4">
+        {% for message in messages %}
+        <div
+          class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded relative"
+          role="alert"
+        >
+          {{ message }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %} {% block content %} {% endblock %}
+    </main>
+
+    <footer class="bg-white border-t mt-auto py-4">
+      <div
+        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-600"
+      >
+        <p>&copy; 2024 Django Weather Reminder. All rights reserved.</p>
+      </div>
+    </footer>
+  </body>
+</html>
