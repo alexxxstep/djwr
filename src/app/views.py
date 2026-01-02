@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 
 from django.conf import settings
+from django.shortcuts import get_object_or_404
 from django.views.generic import TemplateView
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import generics, status
@@ -16,8 +17,16 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenBlacklistView, TokenRefreshView
 from social_django.models import UserSocialAuth
 
-from .models import User
-from .serializers import UserRegistrationSerializer, UserSerializer
+from .models import City, User
+from .serializers import (
+    CityDetailSerializer,
+    CitySerializer,
+    UserRegistrationSerializer,
+    UserSerializer,
+    WeatherDataSerializer,
+)
+from .services.city_service import CityService
+from .services.weather_service import WeatherService
 
 
 class WeatherView(TemplateView):
@@ -776,3 +785,424 @@ def oauth_disconnect(request, provider):
             {"error": f"Provider {provider} is not linked to your account."},
             status=status.HTTP_404_NOT_FOUND,
         )
+
+
+# City Views
+@extend_schema(
+    tags=["Cities"],
+    summary="List Cities",
+    description="Get paginated list of all cities in database.",
+    responses={
+        200: CitySerializer(many=True),
+    },
+)
+class CityListView(generics.ListAPIView):
+    """
+    City list endpoint.
+
+    GET /api/cities/
+    Returns paginated list of all cities in database.
+    """
+
+    queryset = City.objects.all().order_by("name")
+    serializer_class = CitySerializer
+    permission_classes = [AllowAny]
+    pagination_class = None  # Will use default DRF pagination
+
+
+@extend_schema(
+    tags=["Cities"],
+    summary="City Details",
+    description="Get city details with current weather data.",
+    responses={
+        200: CityDetailSerializer,
+        404: OpenApiExample(
+            "Not Found",
+            value={"detail": "Not found."},
+        ),
+    },
+)
+class CityDetailView(generics.RetrieveAPIView):
+    """
+    City detail endpoint.
+
+    GET /api/cities/{id}/
+    Returns city details with current weather.
+    Fetches current weather if not cached.
+    """
+
+    queryset = City.objects.all()
+    serializer_class = CityDetailSerializer
+    permission_classes = [AllowAny]
+
+    def retrieve(self, request, *args, **kwargs):
+        """Retrieve city and fetch current weather if needed."""
+        city = self.get_object()
+
+        # Fetch current weather if not cached
+        weather_service = WeatherService()
+        try:
+            weather_service.fetch_current_weather(city)
+        except Exception as e:
+            # Log error but don't fail the request
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to fetch weather for {city.name}: {e}")
+
+        serializer = self.get_serializer(city)
+        return Response(serializer.data)
+
+
+@extend_schema(
+    tags=["Cities"],
+    summary="Search Cities",
+    description="Search cities by name using database-first approach.",
+    parameters=[
+        {
+            "name": "q",
+            "in": "query",
+            "required": True,
+            "schema": {"type": "string"},
+            "description": "City name to search for",
+            "example": "Kyiv",
+        }
+    ],
+    responses={
+        200: CitySerializer(many=True),
+        400: OpenApiExample(
+            "Bad Request",
+            value={"error": "Query parameter 'q' is required."},
+        ),
+    },
+)
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def city_search_view(request):
+    """
+    City search endpoint.
+
+    GET /api/cities/search/?q={query}
+    Searches cities using database-first approach.
+    Falls back to API if not found in database.
+    """
+    query = request.query_params.get("q", "").strip()
+
+    if not query:
+        return Response(
+            {"error": "Query parameter 'q' is required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    city_service = CityService()
+    cities = city_service.search_cities(query)
+
+    if not cities:
+        return Response(
+            {"results": [], "count": 0, "message": f"No cities found for '{query}'"},
+            status=status.HTTP_200_OK,
+        )
+
+    serializer = CitySerializer(cities, many=True)
+    return Response(
+        {"results": serializer.data, "count": len(cities)},
+        status=status.HTTP_200_OK,
+    )
+
+
+# Weather Views
+@extend_schema(
+    tags=["Weather"],
+    summary="Get Weather Data",
+    description=(
+        "Get weather data for a city. Supports different forecast periods: "
+        "current, today, tomorrow, 3days, week, hourly."
+    ),
+    parameters=[
+        {
+            "name": "period",
+            "in": "query",
+            "required": False,
+            "schema": {"type": "string", "default": "current"},
+            "description": "Forecast period",
+            "enum": [
+                "current",
+                "today",
+                "tomorrow",
+                "3days",
+                "week",
+                "hourly",
+                "10days",
+                "2weeks",
+                "month",
+            ],
+        }
+    ],
+    responses={
+        200: OpenApiExample(
+            "Success Response",
+            value={
+                "city": {"id": 1, "name": "Kyiv", "country": "UA"},
+                "period": "current",
+                "temperature": 15.5,
+                "feels_like": 14.8,
+                "humidity": 65,
+                "pressure": 1013,
+                "wind_speed": 3.2,
+                "description": "clear sky",
+                "icon": "01d",
+            },
+        ),
+        404: OpenApiExample(
+            "Not Found",
+            value={"detail": "City not found."},
+        ),
+    },
+)
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def weather_view(request, city_id):
+    """
+    Weather data endpoint.
+
+    GET /api/weather/{city_id}/?period={period}
+    Returns weather data for a city.
+    Period options: current, today, tomorrow, 3days, week, hourly
+    Default period: current
+    """
+    # #region agent log
+    import json as json_module
+
+    from django.utils import timezone as tz
+
+    try:
+        log_path = settings.BASE_DIR / ".cursor" / "debug.log"
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(
+                json_module.dumps(
+                    {
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "A",
+                        "location": "views.py:973",
+                        "message": "weather_view entry - FIRST LINE",
+                        "data": {
+                            "city_id": city_id,
+                            "base_dir": str(settings.BASE_DIR),
+                        },
+                        "timestamp": int(tz.now().timestamp() * 1000),
+                    }
+                )
+                + "\n"
+            )
+    except Exception as e:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.error(f"Debug log write failed: {e}")
+    # #endregion
+
+    period = request.query_params.get("period", "current").strip()
+
+    # #region agent log
+    try:
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(
+                json_module.dumps(
+                    {
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "A",
+                        "location": "views.py:995",
+                        "message": "weather_view after period extraction",
+                        "data": {"city_id": city_id, "period": period},
+                        "timestamp": int(tz.now().timestamp() * 1000),
+                    }
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+    # #endregion
+
+    # Validate period
+    valid_periods = [
+        "current",
+        "today",
+        "tomorrow",
+        "3days",
+        "week",
+        "hourly",
+        "10days",
+        "2weeks",
+        "month",
+    ]
+    if period not in valid_periods:
+        return Response(
+            {"error": f"Invalid period. Valid options: {', '.join(valid_periods)}"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Get city
+    city = get_object_or_404(City, pk=city_id)
+
+    # Fetch weather data
+    # #region agent log
+    try:
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(
+                json_module.dumps(
+                    {
+                        "sessionId": "debug-session",
+                        "runId": "run1",
+                        "hypothesisId": "A",
+                        "location": "views.py:1045",
+                        "message": "weather_view before service call",
+                        "data": {"city_id": city.id, "period": period},
+                        "timestamp": int(tz.now().timestamp() * 1000),
+                    }
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+    # #endregion
+    weather_service = WeatherService()
+    try:
+        if period == "current":
+            weather_data = weather_service.fetch_current_weather(city)
+        else:
+            weather_data = weather_service.fetch_forecast(city, period)
+        # #region agent log
+        try:
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(
+                    json_module.dumps(
+                        {
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "A",
+                            "location": "views.py:1069",
+                            "message": "weather_view after fetch - type check",
+                            "data": {
+                                "city_id": city.id,
+                                "period": period,
+                                "weather_data_type": type(weather_data).__name__,
+                                "is_list": isinstance(weather_data, list),
+                                "is_dict": isinstance(weather_data, dict),
+                            },
+                            "timestamp": int(tz.now().timestamp() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
+    except Exception as e:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to fetch weather for {city.name}: {e}")
+        return Response(
+            {"error": "Failed to fetch weather data. Please try again later."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    # Add city info to response
+    # Handle both dict (single forecast) and list (hourly forecast)
+    # #region agent log
+    log_path = settings.BASE_DIR / ".cursor" / "debug.log"
+    with open(log_path, "a") as f:
+        f.write(
+            json_module.dumps(
+                {
+                    "sessionId": "debug-session",
+                    "runId": "run1",
+                    "hypothesisId": "A",
+                    "location": "views.py:1015",
+                    "message": "weather_view before response construction",
+                    "data": {
+                        "city_id": city.id,
+                        "period": period,
+                        "weather_data_type": type(weather_data).__name__,
+                        "is_list": isinstance(weather_data, list),
+                    },
+                    "timestamp": int(tz.now().timestamp() * 1000),
+                }
+            )
+            + "\n"
+        )
+    # #endregion
+    if isinstance(weather_data, list):
+        # For hourly forecasts, return list with city info in each item
+        response_data = [
+            {
+                "city": {
+                    "id": city.id,
+                    "name": city.name,
+                    "country": city.country,
+                },
+                "period": period,
+                **item,
+            }
+            for item in weather_data
+        ]
+    else:
+        # For single forecasts, return dict
+        response_data = {
+            "city": {
+                "id": city.id,
+                "name": city.name,
+                "country": city.country,
+            },
+            "period": period,
+            **weather_data,
+        }
+
+    return Response(response_data, status=status.HTTP_200_OK)
+
+
+@extend_schema(
+    tags=["Weather"],
+    summary="Weather History",
+    description="Get historical weather data for a city from database.",
+    responses={
+        200: WeatherDataSerializer(many=True),
+        404: OpenApiExample(
+            "Not Found",
+            value={"detail": "City not found."},
+        ),
+    },
+)
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def weather_history_view(request, city_id):
+    """
+    Weather history endpoint.
+
+    GET /api/weather/{city_id}/history/
+    Returns historical weather data from database.
+    Ordered by fetched_at descending, paginated.
+    """
+    # Get city
+    city = get_object_or_404(City, pk=city_id)
+
+    # Get weather history
+    from .models import WeatherData
+
+    weather_history = (
+        WeatherData.objects.filter(city=city)
+        .order_by("-fetched_at")
+        .select_related("city")
+    )
+
+    # Paginate results
+    from rest_framework.pagination import PageNumberPagination
+
+    paginator = PageNumberPagination()
+    paginator.page_size = 20
+    paginated_history = paginator.paginate_queryset(weather_history, request)
+
+    serializer = WeatherDataSerializer(paginated_history, many=True)
+    return paginator.get_paginated_response(serializer.data)

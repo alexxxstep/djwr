@@ -10,7 +10,7 @@ from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from .models import User
+from .models import City, User, WeatherData
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -188,3 +188,104 @@ class UserSerializer(serializers.ModelSerializer):
                     "Enter a valid URL (e.g., https://example.com/webhook)."
                 )
         return value
+
+
+class WeatherDataSerializer(serializers.ModelSerializer):
+    """
+    Serializer for WeatherData model.
+
+    Used for serializing weather information for cities.
+    """
+
+    city_id = serializers.IntegerField(source="city.id", read_only=True)
+    city_name = serializers.CharField(source="city.name", read_only=True)
+
+    class Meta:
+        model = WeatherData
+        fields = [
+            "id",
+            "city_id",
+            "city_name",
+            "forecast_period",
+            "temperature",
+            "feels_like",
+            "humidity",
+            "pressure",
+            "wind_speed",
+            "wind_deg",
+            "visibility",
+            "clouds",
+            "description",
+            "icon",
+            "fetched_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "city_id",
+            "city_name",
+            "fetched_at",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class CitySerializer(serializers.ModelSerializer):
+    """
+    Serializer for City model.
+
+    Used for listing cities and basic city information.
+    """
+
+    subscriptions_count = serializers.IntegerField(
+        source="subscriptions.count", read_only=True
+    )
+
+    class Meta:
+        model = City
+        fields = [
+            "id",
+            "name",
+            "country",
+            "latitude",
+            "longitude",
+            "subscriptions_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "subscriptions_count",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class CityDetailSerializer(CitySerializer):
+    """
+    Extended City serializer with current weather data.
+
+    Used for city detail views that include weather information.
+    """
+
+    current_weather = serializers.SerializerMethodField()
+
+    class Meta(CitySerializer.Meta):
+        fields = CitySerializer.Meta.fields + ["current_weather"]
+
+    def get_current_weather(self, obj):
+        """
+        Get current weather data for the city.
+
+        Returns the most recent 'current' weather data.
+        """
+        current_weather = (
+            obj.weather_data.filter(forecast_period="current")
+            .order_by("-fetched_at")
+            .first()
+        )
+
+        if current_weather:
+            return WeatherDataSerializer(current_weather).data
+        return None

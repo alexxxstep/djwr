@@ -341,7 +341,7 @@ SOCIAL_AUTH_GITHUB_REDIRECT_URI = os.environ.get(
 # Weather API Configuration
 WEATHER_API_KEY = os.environ.get("WEATHER_API_KEY", "")
 WEATHER_API_URL = os.environ.get(
-    "WEATHER_API_URL", "https://api.openweathermap.org/data/2.5"
+    "WEATHER_API_URL", "https://api.openweathermap.org/data/3.0"
 )
 
 # Django Debug Toolbar settings (development only)

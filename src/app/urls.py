@@ -5,6 +5,13 @@ URL configuration for app.
 from django.urls import path
 
 from . import views
+from .views import (
+    CityDetailView,
+    CityListView,
+    city_search_view,
+    weather_history_view,
+    weather_view,
+)
 
 app_name = "app"
 
@@ -35,5 +42,16 @@ urlpatterns = [
         "auth/oauth/disconnect/<str:provider>/",
         views.oauth_disconnect,
         name="oauth-disconnect",
+    ),
+    # City URLs
+    path("cities/", CityListView.as_view(), name="city-list"),
+    path("cities/<int:pk>/", CityDetailView.as_view(), name="city-detail"),
+    path("cities/search/", city_search_view, name="city-search"),
+    # Weather URLs
+    path("weather/<int:city_id>/", weather_view, name="weather"),
+    path(
+        "weather/<int:city_id>/history/",
+        weather_history_view,
+        name="weather-history",
     ),
 ]
