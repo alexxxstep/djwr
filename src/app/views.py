@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 
 from django.conf import settings
+from django.views.generic import TemplateView
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes
@@ -17,6 +18,12 @@ from social_django.models import UserSocialAuth
 
 from .models import User
 from .serializers import UserRegistrationSerializer, UserSerializer
+
+
+class WeatherView(TemplateView):
+    """Main weather page view."""
+
+    template_name = "weather.html"
 
 
 @extend_schema(

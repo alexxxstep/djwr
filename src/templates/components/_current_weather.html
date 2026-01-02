@@ -1,0 +1,29 @@
+<!-- Current Weather Card (Central Column) -->
+<div class="card-gradient p-6 mb-6 fade-in">
+  <div id="current-weather-content">
+    <!-- Loading state -->
+    <div class="text-center py-12">
+      <div class="spinner-large mx-auto mb-4"></div>
+      <p class="text-dark-text-secondary pulse-slow">Loading weather data...</p>
+    </div>
+  </div>
+</div>
+
+<!-- Template for weather content (used by JavaScript) -->
+<template id="weather-card-template">
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
+    <div class="flex-1">
+      <div class="text-sm text-dark-text-secondary mb-2" id="weather-date"></div>
+      <h1 class="text-4xl font-bold mb-2" id="weather-city"></h1>
+      <p class="text-lg text-dark-text-secondary mb-4" id="weather-description"></p>
+      <div class="flex items-baseline gap-4">
+        <span class="text-6xl font-bold" id="weather-temp"></span>
+        <div class="text-sm text-dark-text-secondary">
+          <span id="weather-high"></span> / <span id="weather-low"></span>
+        </div>
+      </div>
+    </div>
+    <div class="mt-4 md:mt-0" id="weather-icon-large"></div>
+  </div>
+</template>
+

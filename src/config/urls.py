@@ -13,7 +13,11 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
+from app.views import WeatherView
+
 urlpatterns = [
+    # Main weather page (must be before social_django.urls)
+    path("", WeatherView.as_view(), name="weather"),
     path("admin/", admin.site.urls),
     path("api/", include("app.urls")),
     # Frontend test page
@@ -34,7 +38,7 @@ urlpatterns = [
         SpectacularRedocView.as_view(url_name="schema"),
         name="redoc",
     ),
-    # Social Auth URLs
+    # Social Auth URLs (must be after main page)
     path("", include("social_django.urls", namespace="social")),
 ]
 

@@ -1,0 +1,31 @@
+<!-- Air Conditions -->
+<div class="mb-6 fade-in-delay-2">
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-xl font-semibold text-dark-text-primary">AIR CONDITIONS</h2>
+    <button class="text-sm text-accent-blue hover:text-accent-blue/80 transition-smooth" id="see-more-btn">
+      See more
+    </button>
+  </div>
+
+  <div class="grid grid-cols-2 gap-4" id="air-conditions-grid">
+    <!-- Loading state -->
+    <div class="col-span-2 text-center py-8">
+      <div class="spinner mx-auto mb-4"></div>
+      <p class="text-dark-text-secondary pulse-slow">Loading conditions...</p>
+    </div>
+  </div>
+</div>
+
+<!-- Template for air condition item (used by JavaScript) -->
+<template id="air-condition-item-template">
+  <div class="bg-dark-bg-card rounded-lg p-4 card-hover fade-in">
+    <div class="flex items-center gap-3">
+      <div id="condition-icon" class="flex-shrink-0 weather-icon"></div>
+      <div>
+        <div class="text-sm text-dark-text-secondary mb-1" id="condition-label"></div>
+        <div class="text-lg font-semibold" id="condition-value"></div>
+      </div>
+    </div>
+  </div>
+</template>
+

@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Weather - Django Weather Reminder{% endblock %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row h-screen overflow-hidden">
+  <!-- Left Sidebar -->
+  <div class="flex-shrink-0 slide-in-left">
+    {% include 'components/_sidebar.html' %}
+  </div>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 overflow-y-auto scrollbar-dark ml-0 md:ml-20 p-4 md:p-6">
+    <!-- Auth Form (shown when not authenticated) -->
+    <div id="auth-form-wrapper" class="fade-in">
+      {% include 'components/_auth_form.html' %}
+    </div>
+
+    <!-- Weather Content (shown when authenticated) -->
+    <div id="weather-content" class="hidden">
+      <!-- Search Bar -->
+      {% include 'components/_search.html' %}
+
+      <!-- Current Weather Card -->
+      {% include 'components/_current_weather.html' %}
+
+      <!-- Hourly Forecast -->
+      {% include 'components/_hourly_forecast.html' %}
+
+      <!-- Air Conditions -->
+      {% include 'components/_air_conditions.html' %}
+    </div>
+  </main>
+
+  <!-- Right Panel - Subscribed Cities -->
+  <div class="flex-shrink-0 hidden lg:block">
+    <div id="cities-panel-wrapper" class="fade-in-delay-3">
+      {% include 'components/_subscribed_cities.html' %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
