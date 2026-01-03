@@ -39,12 +39,17 @@
   }
 
   .card-gradient:hover {
-    @apply shadow-card-hover transform scale-[1.01];
+    @apply shadow-card-hover;
   }
 
   /* Loading spinner */
   .spinner {
     @apply inline-block w-6 h-6 border-2 border-dark-text-secondary border-t-accent-blue rounded-full animate-spin;
+  }
+
+  /* Period selector button active state */
+  .period-btn.active {
+    @apply bg-accent-blue text-white;
   }
 
   .spinner-large {
@@ -73,9 +78,14 @@
     animation: slideInLeft 0.3s ease-out;
   }
 
+  /* Slide-in animation for right panel (mobile) */
+  .slide-in-right {
+    animation: slideInRight 0.3s ease-out;
+  }
+
   /* Card hover effects */
   .card-hover {
-    @apply transition-all duration-300 hover:shadow-card-hover hover:transform hover:scale-[1.02];
+    @apply transition-all duration-300 hover:shadow-card-hover;
   }
 
   /* Button hover effects */
@@ -99,6 +109,10 @@
   /* Weather icon animation */
   .weather-icon {
     @apply transition-transform duration-300;
+  }
+
+  .weather-icon svg {
+    @apply w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8;
   }
 
   .weather-icon:hover {
@@ -165,6 +179,17 @@
     from {
       opacity: 0;
       transform: translateX(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slideInRight {
+    from {
+      opacity: 0;
+      transform: translateX(100%);
     }
     to {
       opacity: 1;

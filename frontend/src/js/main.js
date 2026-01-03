@@ -8,10 +8,26 @@ import '../css/main.css';
 // Import modules
 import { initSearch } from './search.js';
 import { initSidebar, initPeriodNavigation, initCityNavigation } from './ui.js';
-import { loadSubscribedCitiesWithWeather, renderSubscribedCitiesList, selectCityFromList, addNewLocation } from './subscriptions.js';
-import { fetchWeatherForecast, updateWeatherDisplay, updateHourlyForecast, updateAirConditions } from './weather.js';
-import { updateSelectedCityDetail } from './ui.js';
-import { isAuthenticated, login, register, logout, getCurrentUser } from './auth.js';
+import {
+  loadSubscribedCitiesWithWeather,
+  renderSubscribedCitiesList,
+  selectCityFromList,
+  addNewLocation,
+  initTimeUpdates,
+  stopTimeUpdates,
+} from './subscriptions.js';
+import {
+  fetchWeatherForecast,
+  updateWeatherDisplay,
+  updateHourlyForecast,
+} from './weather.js';
+import {
+  isAuthenticated,
+  login,
+  register,
+  logout,
+  getCurrentUser,
+} from './auth.js';
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
@@ -31,6 +47,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Setup event listeners
   setupEventListeners();
+
+  // Initialize mobile cities panel
+  initMobileCitiesPanel();
+
+  // Initialize time updates for cities
+  if (isAuthenticated()) {
+    initTimeUpdates();
+  }
 });
 
 /**
@@ -39,8 +63,9 @@ document.addEventListener('DOMContentLoaded', () => {
 function initAuthUI() {
   // Check authentication status
   if (isAuthenticated()) {
-    showAuthenticatedUI();
-    loadUserInfo();
+    showAuthenticatedUI().then(() => {
+      loadUserInfo();
+    });
   } else {
     showUnauthenticatedUI();
   }
@@ -53,6 +78,7 @@ function initAuthUI() {
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
       if (confirm('Are you sure you want to logout?')) {
+        stopTimeUpdates();
         await logout();
       }
     });
@@ -94,35 +120,55 @@ function initAuthUI() {
 /**
  * Show authenticated UI
  */
-function showAuthenticatedUI() {
+async function showAuthenticatedUI() {
   // Hide auth form
   const authFormWrapper = document.getElementById('auth-form-wrapper');
   if (authFormWrapper) {
     authFormWrapper.classList.add('hidden');
   }
 
-  // Show weather content
+  // Always show weather content (including search) for authenticated users
+  // Weather data will be shown only if user has subscriptions
   const weatherContent = document.getElementById('weather-content');
   if (weatherContent) {
     weatherContent.classList.remove('hidden');
+    // Re-initialize search after showing weather content
+    setTimeout(() => {
+      initSearch();
+    }, 100);
+  }
+
+  // Check if user has subscriptions to show weather data
+  try {
+    const citiesData = await loadSubscribedCitiesWithWeather();
+    if (!citiesData || citiesData.length === 0) {
+      // Hide weather data sections if no subscriptions, but keep search visible
+      const currentWeatherCard = document.querySelector(
+        '#current-weather-content'
+      );
+      const hourlyForecast = document.getElementById(
+        'hourly-forecast-container'
+      );
+
+      if (currentWeatherCard) {
+        currentWeatherCard.innerHTML =
+          '<div class="text-center py-8 text-dark-text-secondary">No subscribed cities. Use search to add cities.</div>';
+      }
+      if (hourlyForecast) {
+        hourlyForecast.innerHTML = '';
+      }
+      if (airConditions) {
+        airConditions.innerHTML = '';
+      }
+    }
+  } catch (error) {
+    console.error('Failed to check subscriptions:', error);
   }
 
   // Show cities panel
   const citiesPanel = document.getElementById('cities-panel-wrapper');
   if (citiesPanel) {
     citiesPanel.classList.remove('hidden');
-  }
-
-  // Show main navigation
-  const mainNavigation = document.getElementById('main-navigation');
-  if (mainNavigation) {
-    mainNavigation.classList.remove('hidden');
-  }
-
-  // Show period navigation
-  const periodNav = document.getElementById('period-navigation');
-  if (periodNav) {
-    periodNav.classList.remove('hidden');
   }
 
   // Hide auth buttons, show logout
@@ -156,18 +202,6 @@ function showUnauthenticatedUI() {
   const citiesPanel = document.getElementById('cities-panel-wrapper');
   if (citiesPanel) {
     citiesPanel.classList.add('hidden');
-  }
-
-  // Hide main navigation
-  const mainNavigation = document.getElementById('main-navigation');
-  if (mainNavigation) {
-    mainNavigation.classList.add('hidden');
-  }
-
-  // Hide period navigation
-  const periodNav = document.getElementById('period-navigation');
-  if (periodNav) {
-    periodNav.classList.add('hidden');
   }
 
   // Show auth buttons, hide logout
@@ -237,7 +271,7 @@ function setupAuthFormHandlers() {
   const loginEmail = document.getElementById('login-email');
   const loginPassword = document.getElementById('login-password');
   if (loginEmail && loginPassword) {
-    [loginEmail, loginPassword].forEach(input => {
+    [loginEmail, loginPassword].forEach((input) => {
       input.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
           handleLogin();
@@ -249,7 +283,7 @@ function setupAuthFormHandlers() {
   const registerEmail = document.getElementById('register-email');
   const registerPassword = document.getElementById('register-password');
   if (registerEmail && registerPassword) {
-    [registerEmail, registerPassword].forEach(input => {
+    [registerEmail, registerPassword].forEach((input) => {
       input.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
           handleRegister();
@@ -285,12 +319,15 @@ async function handleLogin() {
     await login(email, password);
 
     // Success - reload UI
-    showAuthenticatedUI();
-    loadUserInfo();
-    initializeWeatherApp();
+    showAuthenticatedUI().then(() => {
+      loadUserInfo();
+      initializeWeatherApp();
+      initTimeUpdates();
+    });
   } catch (error) {
     if (errorEl) {
-      errorEl.textContent = error.message || 'Login failed. Please check your credentials.';
+      errorEl.textContent =
+        error.message || 'Login failed. Please check your credentials.';
       errorEl.classList.remove('hidden');
     }
   } finally {
@@ -343,12 +380,15 @@ async function handleRegister() {
     });
 
     // Success - reload UI
-    showAuthenticatedUI();
-    loadUserInfo();
-    initializeWeatherApp();
+    showAuthenticatedUI().then(() => {
+      loadUserInfo();
+      initializeWeatherApp();
+      initTimeUpdates();
+    });
   } catch (error) {
     if (errorEl) {
-      errorEl.textContent = error.message || 'Registration failed. Please try again.';
+      errorEl.textContent =
+        error.message || 'Registration failed. Please try again.';
       errorEl.classList.remove('hidden');
     }
   } finally {
@@ -368,7 +408,8 @@ async function initializeWeatherApp() {
     // Show empty state for non-authenticated users
     const listContainer = document.getElementById('subscribed-cities-list');
     if (listContainer) {
-      listContainer.innerHTML = '<div class="text-center py-8 text-dark-text-secondary text-sm">Please log in to see your subscribed cities</div>';
+      listContainer.innerHTML =
+        '<div class="text-center py-8 text-dark-text-secondary text-sm">Please log in to see your subscribed cities</div>';
     }
     return;
   }
@@ -381,6 +422,9 @@ async function initializeWeatherApp() {
       // Render cities list
       renderSubscribedCitiesList(citiesData);
 
+      // Initialize time updates after rendering cities
+      initTimeUpdates();
+
       // Select first city by default
       const firstCity = citiesData[0];
       if (firstCity && firstCity.city) {
@@ -391,7 +435,8 @@ async function initializeWeatherApp() {
       // No subscriptions
       const listContainer = document.getElementById('subscribed-cities-list');
       if (listContainer) {
-        listContainer.innerHTML = '<div class="text-center py-8 text-dark-text-secondary text-sm">No subscribed cities. Use search to add cities.</div>';
+        listContainer.innerHTML =
+          '<div class="text-center py-8 text-dark-text-secondary text-sm">No subscribed cities. Use search to add cities.</div>';
       }
     }
   } catch (error) {
@@ -399,52 +444,48 @@ async function initializeWeatherApp() {
     // Show error message
     const listContainer = document.getElementById('subscribed-cities-list');
     if (listContainer) {
-      listContainer.innerHTML = '<div class="text-center py-8 text-dark-text-secondary text-sm">Failed to load cities. API endpoints may not be available yet.</div>';
+      listContainer.innerHTML =
+        '<div class="text-center py-8 text-dark-text-secondary text-sm">Failed to load cities. API endpoints may not be available yet.</div>';
     }
   }
 }
+
+// Track loading state to prevent multiple simultaneous calls
+let isLoadingWeather = false;
+let lastLoadedCityId = null;
+let lastLoadedPeriod = null;
+let selectedForecastPeriod = 'today'; // Default period for forecast display
 
 /**
  * Load weather for a city
  */
 async function loadWeatherForCity(cityId, period = 'current') {
+  // Prevent multiple simultaneous calls for the same city and period
+  if (
+    isLoadingWeather &&
+    lastLoadedCityId === cityId &&
+    lastLoadedPeriod === period
+  ) {
+    return;
+  }
+
+  isLoadingWeather = true;
+  lastLoadedCityId = cityId;
+  lastLoadedPeriod = period;
+
   try {
-    const weatherData = await fetchWeatherForecast(cityId, period);
+    // Always load current weather first (for main card), regardless of period parameter
+    const weatherData = await fetchWeatherForecast(cityId, 'current');
 
     if (!weatherData) {
       throw new Error('No weather data received');
     }
 
-    // Update main weather display
+    // Update main weather display (includes air conditions)
     updateWeatherDisplay(weatherData);
 
-    // Update selected city detail
-    updateSelectedCityDetail(cityId, weatherData);
-
-    // Update air conditions
-    updateAirConditions(weatherData);
-
-    // Load hourly forecast if period is current or hourly
-    if (period === 'current' || period === 'hourly') {
-      try {
-        const hourlyData = await fetchWeatherForecast(cityId, 'hourly');
-        if (hourlyData && Array.isArray(hourlyData.list)) {
-          updateHourlyForecast(hourlyData.list);
-        } else {
-          // Show empty state for hourly forecast
-          const container = document.getElementById('hourly-forecast-container');
-          if (container) {
-            container.innerHTML = '<div class="text-center py-8 text-dark-text-secondary text-sm">Hourly forecast not available</div>';
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load hourly forecast:', error);
-        const container = document.getElementById('hourly-forecast-container');
-        if (container) {
-          container.innerHTML = '<div class="text-center py-8 text-dark-text-secondary text-sm">Failed to load hourly forecast</div>';
-        }
-      }
-    }
+    // Load forecast data based on selected period (separate from current weather)
+    await loadForecastForPeriod(cityId, selectedForecastPeriod);
   } catch (error) {
     console.error('Failed to load weather:', error);
     // Show error in UI
@@ -457,32 +498,164 @@ async function loadWeatherForCity(cityId, period = 'current') {
         </div>
       `;
     }
+  } finally {
+    isLoadingWeather = false;
+  }
+}
+
+/**
+ * Load forecast data for a specific period
+ */
+async function loadForecastForPeriod(cityId, period) {
+  try {
+    // Map frontend periods to backend API periods
+    const apiPeriodMap = {
+      today: 'hourly',
+      tomorrow: 'hourly',
+      '3days': '3days',
+      week: 'week',
+    };
+
+    const apiPeriod = apiPeriodMap[period] || 'hourly';
+
+    const forecastData = await fetchWeatherForecast(cityId, apiPeriod);
+
+    if (!forecastData) {
+      throw new Error('No forecast data received from API');
+    }
+
+    // Convert to array format if needed
+    // API returns list of objects with city, period, and weather data
+    let forecastArray = null;
+    if (forecastData && Array.isArray(forecastData)) {
+      // If it's already an array, use it directly
+      forecastArray = forecastData;
+    } else if (forecastData && Array.isArray(forecastData.list)) {
+      // Legacy format with .list property
+      forecastArray = forecastData.list;
+    } else if (forecastData && typeof forecastData === 'object') {
+      // Try to extract array from object keys
+      const keys = Object.keys(forecastData)
+        .filter((k) => !isNaN(parseInt(k)))
+        .sort((a, b) => parseInt(a) - parseInt(b));
+      if (keys.length > 0) {
+        forecastArray = keys.map((k) => forecastData[k]);
+      } else {
+        // Single object - wrap in array
+        forecastArray = [forecastData];
+      }
+    }
+
+    if (forecastArray && forecastArray.length > 0) {
+      updateHourlyForecast(forecastArray, period);
+    } else {
+      console.warn('Forecast array is empty or invalid:', {
+        forecastData,
+        forecastArray,
+        period,
+        apiPeriod,
+      });
+      const container = document.getElementById('hourly-forecast-container');
+      if (container) {
+        container.innerHTML =
+          '<div class="text-center py-8 text-dark-text-secondary text-sm">Forecast not available</div>';
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load forecast:', error, { cityId, period });
+    const container = document.getElementById('hourly-forecast-container');
+    if (container) {
+      container.innerHTML =
+        '<div class="text-center py-8 text-dark-text-secondary text-sm">Failed to load forecast</div>';
+    }
   }
 }
 
 /**
  * Setup event listeners
  */
+// Debouncing state for city selection
+let citySelectedTimeout = null;
+let lastCitySelectedId = null;
+let lastCitySelectedTime = 0;
+const CITY_SELECT_DEBOUNCE_MS = 500; // 500ms debounce
+
+/**
+ * Setup period selector buttons
+ */
+function setupPeriodSelector() {
+  const periodButtons = document.querySelectorAll('.period-btn');
+  periodButtons.forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const period = btn.getAttribute('data-period');
+      if (!period) return;
+
+      // Update active state
+      periodButtons.forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Update selected period
+      selectedForecastPeriod = period;
+
+      // Reload forecast if city is selected (but keep current weather)
+      if (lastLoadedCityId) {
+        // Only reload forecast, don't reload current weather
+        await loadForecastForPeriod(lastLoadedCityId, period);
+      }
+    });
+  });
+}
+
 function setupEventListeners() {
-  // City selection event
+  // Setup period selector
+  setupPeriodSelector();
+
+  // City selection event with debouncing
   document.addEventListener('citySelected', async (e) => {
     if (!isAuthenticated()) return;
 
     const { cityId, city } = e.detail;
+    const now = Date.now();
 
-    if (cityId) {
-      await loadWeatherForCity(cityId, 'current');
-    } else if (city) {
-      // New city selected from search
-      // Could create subscription or just show weather
-      console.log('City selected from search:', city);
+    // Debounce: ignore if same city selected within debounce period
+    if (
+      cityId &&
+      cityId === lastCitySelectedId &&
+      now - lastCitySelectedTime < CITY_SELECT_DEBOUNCE_MS
+    ) {
+      return;
     }
+
+    // Update immediately to prevent duplicate processing
+    lastCitySelectedId = cityId;
+    lastCitySelectedTime = now;
+
+    // Clear previous timeout
+    if (citySelectedTimeout) {
+      clearTimeout(citySelectedTimeout);
+    }
+
+    // Set new timeout for debouncing
+    citySelectedTimeout = setTimeout(async () => {
+      // Close mobile cities panel if open
+      closeMobileCitiesPanel();
+
+      if (cityId) {
+        await loadWeatherForCity(cityId, 'current');
+      } else if (city) {
+        // New city selected from search
+        // Could create subscription or just show weather
+        console.log('City selected from search:', city);
+      }
+    }, 100); // 100ms delay to batch rapid events
   });
 
   // Period selection event
   document.addEventListener('periodSelected', async (e) => {
     const { period } = e.detail;
-    const selectedCityId = document.querySelector('.city-list-item.active')?.getAttribute('data-city-id');
+    const selectedCityId = document
+      .querySelector('.city-list-item.active')
+      ?.getAttribute('data-city-id');
 
     if (selectedCityId) {
       await loadWeatherForCity(parseInt(selectedCityId), period);
@@ -495,6 +668,59 @@ function setupEventListeners() {
     addLocationBtn.addEventListener('click', () => {
       addNewLocation();
     });
+  }
+}
+
+/**
+ * Initialize mobile cities panel
+ */
+function initMobileCitiesPanel() {
+  const toggleBtn = document.getElementById('mobile-cities-toggle');
+  const closeBtn = document.getElementById('mobile-cities-close');
+  const panelContainer = document.getElementById('cities-panel-container');
+  const overlay = document.getElementById('cities-panel-overlay');
+
+  // Toggle panel on button click
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      if (panelContainer) {
+        panelContainer.classList.remove('hidden');
+        panelContainer.classList.add('slide-in-right');
+      }
+      if (overlay) {
+        overlay.classList.remove('hidden');
+      }
+    });
+  }
+
+  // Close panel on close button click
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      closeMobileCitiesPanel();
+    });
+  }
+
+  // Close panel on overlay click
+  if (overlay) {
+    overlay.addEventListener('click', () => {
+      closeMobileCitiesPanel();
+    });
+  }
+}
+
+/**
+ * Close mobile cities panel
+ */
+function closeMobileCitiesPanel() {
+  const panelContainer = document.getElementById('cities-panel-container');
+  const overlay = document.getElementById('cities-panel-overlay');
+
+  if (panelContainer) {
+    panelContainer.classList.add('hidden');
+    panelContainer.classList.remove('slide-in-right');
+  }
+  if (overlay) {
+    overlay.classList.add('hidden');
   }
 }
 

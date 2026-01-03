@@ -10,7 +10,7 @@ from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
-from .models import City, User, WeatherData
+from .models import City, Subscription, User, WeatherData
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -84,30 +84,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         """Create user with hashed password."""
-        # #region agent log
-        log_path = str(settings.BASE_DIR / ".cursor" / "debug.log")
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "A",
-                            "location": "serializers.py:84",
-                            "message": "UserRegistrationSerializer.create entry",
-                            "data": {
-                                "email": validated_data.get("email", ""),
-                                "has_password": "password" in validated_data,
-                            },
-                            "timestamp": int(datetime.now().timestamp() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         validated_data.pop("password2")
         password = validated_data.pop("password")
         user = User.objects.create_user(
@@ -115,31 +91,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             is_email_verified=False,
             **validated_data,
         )
-        # #region agent log
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "A",
-                            "location": "serializers.py:93",
-                            "message": "UserRegistrationSerializer.create user created",
-                            "data": {
-                                "user_id": user.id,
-                                "email": user.email,
-                                "password_hashed": user.password != password,
-                                "is_email_verified": user.is_email_verified,
-                            },
-                            "timestamp": int(datetime.now().timestamp() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         return user
 
 
@@ -289,3 +240,194 @@ class CityDetailSerializer(CitySerializer):
         if current_weather:
             return WeatherDataSerializer(current_weather).data
         return None
+
+
+class SubscriptionSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Subscription model.
+
+    Includes nested CitySerializer for city information
+    and user email (read-only).
+    """
+
+    city = CitySerializer(read_only=True)
+    city_id = serializers.IntegerField(write_only=True, required=False)
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+
+    class Meta:
+        model = Subscription
+        fields = [
+            "id",
+            "user",
+            "user_email",
+            "city",
+            "city_id",
+            "period",
+            "forecast_period",
+            "notification_type",
+            "is_active",
+            "last_notified_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "user",
+            "user_email",
+            "last_notified_at",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate_period(self, value):
+        """Validate period is one of the allowed choices (1, 3, 6, 12)."""
+        valid_periods = [1, 3, 6, 12]
+        if value not in valid_periods:
+            raise serializers.ValidationError(
+                f"Period must be one of: {', '.join(map(str, valid_periods))}"
+            )
+        return value
+
+    def validate_forecast_period(self, value):
+        """Validate forecast_period is one of the allowed choices."""
+        valid_periods = ["current", "today", "tomorrow", "3days", "week"]
+        if value not in valid_periods:
+            raise serializers.ValidationError(
+                f"Forecast period must be one of: {', '.join(valid_periods)}"
+            )
+        return value
+
+    def validate_notification_type(self, value):
+        """Validate notification_type is one of the allowed choices."""
+        valid_types = ["email", "webhook", "both"]
+        if value not in valid_types:
+            raise serializers.ValidationError(
+                f"Notification type must be one of: {', '.join(valid_types)}"
+            )
+        return value
+
+
+class SubscriptionCreateSerializer(SubscriptionSerializer):
+    """
+    Serializer for creating subscriptions.
+
+    Extends SubscriptionSerializer and adds validation
+    to prevent duplicate subscriptions (unique_together: user + city).
+
+    Can create city in database if city_id is not provided but city data is provided.
+    """
+
+    city_id = serializers.IntegerField(write_only=True, required=False)
+    city_data = serializers.DictField(
+        write_only=True,
+        required=False,
+        help_text="City data (name, country, lat, lon) if city not in DB",
+    )
+    is_active = serializers.BooleanField(default=True, required=False)
+
+    class Meta(SubscriptionSerializer.Meta):
+        fields = SubscriptionSerializer.Meta.fields + ["city_data"]
+        read_only_fields = [
+            "id",
+            "user",
+            "user_email",
+            "last_notified_at",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate(self, attrs):
+        """Validate that user cannot subscribe to the same city twice."""
+        user = self.context["request"].user
+        city_id = attrs.get("city_id")
+        city_data = attrs.get("city_data")
+
+        # Must provide either city_id or city_data
+        if not city_id and not city_data:
+            raise serializers.ValidationError(
+                {"city_id": "Either city_id or city_data must be provided."}
+            )
+
+        # If city_id provided, use existing city
+        if city_id:
+            try:
+                city = City.objects.get(pk=city_id)
+            except City.DoesNotExist:
+                raise serializers.ValidationError({"city_id": "City not found."})
+        else:
+            # Create city from API data
+            if not all(key in city_data for key in ["name", "country", "lat", "lon"]):
+                raise serializers.ValidationError(
+                    {
+                        "city_data": "Must include 'name', 'country', 'lat', and 'lon' fields."
+                    }
+                )
+
+            from app.services.city_service import CityService
+
+            city_service = CityService()
+            city, created = city_service.get_or_create_city(
+                name=city_data["name"],
+                country=city_data["country"],
+                lat=city_data["lat"],
+                lon=city_data["lon"],
+            )
+
+        # Check if subscription already exists
+        if Subscription.objects.filter(user=user, city=city).exists():
+            raise serializers.ValidationError(
+                {"city_id": "You are already subscribed to this city."}
+            )
+
+        attrs["city"] = city
+        # Remove city_data from attrs as it's not a model field
+        attrs.pop("city_data", None)
+        return attrs
+
+    def create(self, validated_data):
+        """Create subscription and set user automatically."""
+        validated_data["user"] = self.context["request"].user
+        city = validated_data.pop("city")
+        validated_data["city"] = city
+        return super().create(validated_data)
+
+
+class SubscriptionUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for updating subscriptions.
+
+    Allows updating period, forecast_period, notification_type, and is_active.
+    Prevents updating user and city.
+    """
+
+    class Meta:
+        model = Subscription
+        fields = ["period", "forecast_period", "notification_type", "is_active"]
+        read_only_fields = ["user", "city"]
+
+    def validate_period(self, value):
+        """Validate period is one of the allowed choices (1, 3, 6, 12)."""
+        valid_periods = [1, 3, 6, 12]
+        if value not in valid_periods:
+            raise serializers.ValidationError(
+                f"Period must be one of: {', '.join(map(str, valid_periods))}"
+            )
+        return value
+
+    def validate_forecast_period(self, value):
+        """Validate forecast_period is one of the allowed choices."""
+        valid_periods = ["current", "today", "tomorrow", "3days", "week"]
+        if value not in valid_periods:
+            raise serializers.ValidationError(
+                f"Forecast period must be one of: {', '.join(valid_periods)}"
+            )
+        return value
+
+    def validate_notification_type(self, value):
+        """Validate notification_type is one of the allowed choices."""
+        valid_types = ["email", "webhook", "both"]
+        if value not in valid_types:
+            raise serializers.ValidationError(
+                f"Notification type must be one of: {', '.join(valid_types)}"
+            )
+        return value

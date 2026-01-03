@@ -62,10 +62,14 @@ export async function fetchWeeklyForecast(cityId) {
  */
 export function updateWeatherDisplay(weatherData, containerId = 'current-weather-content') {
   const container = document.getElementById(containerId);
-  if (!container || !weatherData) return;
+  if (!container || !weatherData) {
+    return;
+  }
 
   const template = document.getElementById('weather-card-template');
-  if (!template) return;
+  if (!template) {
+    return;
+  }
 
   const clone = template.content.cloneNode(true);
 
@@ -111,41 +115,532 @@ export function updateWeatherDisplay(weatherData, containerId = 'current-weather
     iconEl.appendChild(icon);
   }
 
+  // Update air conditions info
+  const feelsLikeEl = clone.getElementById('weather-feels-like');
+  if (feelsLikeEl && weatherData.feels_like !== undefined) {
+    feelsLikeEl.textContent = formatTemperature(weatherData.feels_like);
+  }
+
+  const rainEl = clone.getElementById('weather-rain');
+  if (rainEl) {
+    const pop = weatherData.pop || weatherData.rain_probability || 0;
+    rainEl.textContent = `${Math.round(pop * 100)}%`;
+  }
+
+  const windEl = clone.getElementById('weather-wind');
+  if (windEl && weatherData.wind_speed !== undefined) {
+    windEl.textContent = `${weatherData.wind_speed} km/h`;
+  }
+
+  const uvEl = clone.getElementById('weather-uv');
+  if (uvEl) {
+    uvEl.textContent = weatherData.uvi || weatherData.uv_index || '--';
+  }
+
   container.innerHTML = '';
   container.appendChild(clone);
 }
 
 /**
+ * Filter hourly data to show every 3 hours (2 AM, 5 AM, 8 AM, ..., 11 PM)
+ * @param {Array} hourlyData - Array of hourly forecast items
+ * @param {string} period - 'today' or 'tomorrow'
+ */
+function filterEvery3Hours(hourlyData, period = 'today') {
+  if (!Array.isArray(hourlyData) || hourlyData.length === 0) {
+    return [];
+  }
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const filtered = [];
+  const targetHours = [2, 5, 8, 11, 14, 17, 20, 23]; // Every 3 hours starting from 2 AM
+
+  hourlyData.forEach((item) => {
+    let timestamp;
+    if (typeof item.dt === 'string') {
+      timestamp = new Date(item.dt).getTime();
+    } else if (typeof item.dt === 'number') {
+      timestamp = item.dt * 1000;
+    } else {
+      return;
+    }
+
+    const date = new Date(timestamp);
+    const itemDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const hours = date.getHours();
+
+    // Filter by date based on period
+    if (period === 'tomorrow') {
+      // Only include items from tomorrow
+      if (itemDate.getTime() !== tomorrow.getTime()) {
+        return;
+      }
+    } else {
+      // For 'today', include items from today
+      if (itemDate.getTime() !== today.getTime()) {
+        return;
+      }
+    }
+
+    // Filter: 2, 5, 8, 11, 14, 17, 20, 23 (every 3 hours starting from 2 AM)
+    if (targetHours.includes(hours)) {
+      filtered.push(item);
+    }
+  });
+
+  // For 'today', ensure we have all hours from 2 AM to 11 PM
+  // API may not return past hours, so we need to handle missing data
+  if (period === 'today') {
+    // Sort by timestamp
+    filtered.sort((a, b) => {
+      const tsA = typeof a.dt === 'number' ? a.dt * 1000 : new Date(a.dt).getTime();
+      const tsB = typeof b.dt === 'number' ? b.dt * 1000 : new Date(b.dt).getTime();
+      return tsA - tsB;
+    });
+
+    // Create a map of hours we have
+    const hoursMap = new Map();
+    filtered.forEach((item) => {
+      let timestamp;
+      if (typeof item.dt === 'string') {
+        timestamp = new Date(item.dt).getTime();
+      } else if (typeof item.dt === 'number') {
+        timestamp = item.dt * 1000;
+      } else {
+        return;
+      }
+      const date = new Date(timestamp);
+      const hours = date.getHours();
+      hoursMap.set(hours, item);
+    });
+
+    // Build result array with all target hours (2, 5, 8, 11, 14, 17, 20, 23)
+    // For missing past hours, use the earliest available data
+    const result = [];
+    const currentHour = now.getHours();
+    let earliestItem = filtered.length > 0 ? filtered[0] : null;
+
+    targetHours.forEach((targetHour) => {
+      if (hoursMap.has(targetHour)) {
+        // We have data for this hour
+        result.push(hoursMap.get(targetHour));
+      } else if (targetHour < currentHour && earliestItem) {
+        // Past hour is missing - use earliest available data as fallback
+        // This handles cases where API doesn't return historical data
+        const fallbackItem = { ...earliestItem };
+        // Update timestamp to match the target hour
+        const targetDate = new Date(today);
+        targetDate.setHours(targetHour, 0, 0, 0);
+        fallbackItem.dt = Math.floor(targetDate.getTime() / 1000);
+        result.push(fallbackItem);
+      } else if (targetHour >= currentHour) {
+        // Future hour is missing - find closest future hour
+        let closestItem = null;
+        let minDiff = Infinity;
+        filtered.forEach((item) => {
+          let timestamp;
+          if (typeof item.dt === 'string') {
+            timestamp = new Date(item.dt).getTime();
+          } else if (typeof item.dt === 'number') {
+            timestamp = item.dt * 1000;
+          } else {
+            return;
+          }
+          const date = new Date(timestamp);
+          const itemHour = date.getHours();
+          if (itemHour >= targetHour) {
+            const diff = itemHour - targetHour;
+            if (diff < minDiff) {
+              minDiff = diff;
+              closestItem = item;
+            }
+          }
+        });
+        if (closestItem) {
+          result.push(closestItem);
+        }
+      }
+    });
+
+    return result;
+  }
+
+  return filtered;
+}
+
+/**
+ * Group forecast data by day and time periods (Night, Morning, Day, Evening)
+ * Returns data for next 3 days
+ */
+function groupByDayPeriods(forecastData) {
+  if (!Array.isArray(forecastData) || forecastData.length === 0) {
+    return [];
+  }
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const day2 = new Date(tomorrow);
+  day2.setDate(day2.getDate() + 1);
+  const day3 = new Date(day2);
+  day3.setDate(day3.getDate() + 1);
+
+  // Include today, tomorrow, and day after tomorrow (3 days total)
+  const targetDays = [today, tomorrow, day2];
+  const grouped = [];
+  const dayMap = new Map();
+
+  forecastData.forEach((item) => {
+    let timestamp;
+    if (typeof item.dt === 'string') {
+      timestamp = new Date(item.dt).getTime();
+    } else if (typeof item.dt === 'number') {
+      timestamp = item.dt * 1000;
+    } else {
+      return;
+    }
+
+    const date = new Date(timestamp);
+    const itemDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const hours = date.getHours();
+
+    // Include items from today, tomorrow, and day after tomorrow (3 days total)
+    const isTargetDay = targetDays.some(
+      (targetDay) => itemDate.getTime() === targetDay.getTime()
+    );
+    if (!isTargetDay) {
+      return;
+    }
+
+    const dateKey = itemDate.toDateString();
+
+    // Determine period: Night (0-5), Morning (6-11), Day (12-17), Evening (18-23)
+    let period;
+    if (hours >= 0 && hours < 6) {
+      period = 'Night';
+    } else if (hours >= 6 && hours < 12) {
+      period = 'Morning';
+    } else if (hours >= 12 && hours < 18) {
+      period = 'Day';
+    } else {
+      period = 'Evening';
+    }
+
+    if (!dayMap.has(dateKey)) {
+      dayMap.set(dateKey, {
+        date: itemDate, // Store as Date object
+        periods: {},
+      });
+    }
+
+    const dayData = dayMap.get(dateKey);
+    if (!dayData.periods[period]) {
+      dayData.periods[period] = [];
+    }
+    dayData.periods[period].push(item);
+  });
+
+  // Convert to array and get representative item for each period
+  // Sort days to ensure correct order
+  const sortedDays = Array.from(dayMap.entries()).sort((a, b) => {
+    return a[1].date.getTime() - b[1].date.getTime();
+  });
+
+  sortedDays.forEach(([dateKey, dayData]) => {
+    const periods = ['Night', 'Morning', 'Day', 'Evening'];
+    periods.forEach((period) => {
+      if (dayData.periods[period] && dayData.periods[period].length > 0) {
+        const items = dayData.periods[period];
+        // Get the middle item as representative
+        const middleIndex = Math.floor(items.length / 2);
+        const representative = items[middleIndex];
+        grouped.push({
+          date: dayData.date,
+          period: period,
+          dt: representative.dt, // Keep original timestamp for icon/weather
+          temp: representative.temp !== undefined ? representative.temp : representative.temperature,
+          temperature: representative.temp !== undefined ? representative.temp : representative.temperature,
+          feels_like: representative.feels_like,
+          humidity: representative.humidity,
+          pressure: representative.pressure,
+          wind_speed: representative.wind_speed,
+          wind_deg: representative.wind_deg,
+          visibility: representative.visibility,
+          clouds: representative.clouds,
+          description: representative.description,
+          icon: representative.icon,
+          weather: representative.weather || (representative.description ? [{ description: representative.description }] : []),
+        });
+      }
+    });
+  });
+
+  return grouped;
+}
+
+/**
  * Update hourly forecast display
  */
-export function updateHourlyForecast(hourlyData, containerId = 'hourly-forecast-container') {
+export function updateHourlyForecast(
+  hourlyData,
+  period = 'today',
+  containerId = 'hourly-forecast-container'
+) {
   const container = document.getElementById(containerId);
-  if (!container || !hourlyData || !Array.isArray(hourlyData)) return;
+  if (!container || !hourlyData) {
+    return;
+  }
 
   const template = document.getElementById('hourly-item-template');
-  if (!template) return;
+  if (!template) {
+    return;
+  }
 
   container.innerHTML = '';
 
-  hourlyData.slice(0, 24).forEach((item) => {
+  let displayData = [];
+
+  if (period === 'today' || period === 'tomorrow') {
+    // Filter to show every 3 hours
+    if (Array.isArray(hourlyData)) {
+      displayData = filterEvery3Hours(hourlyData, period);
+    }
+  } else if (period === '3days') {
+    // Group by day periods (Night, Morning, Day, Evening)
+    if (Array.isArray(hourlyData)) {
+      displayData = groupByDayPeriods(hourlyData);
+    }
+  } else if (period === 'week') {
+    // Show 7 days starting from today - get one item per day
+    if (Array.isArray(hourlyData)) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const targetDays = [];
+      for (let i = 0; i < 7; i++) {
+        const day = new Date(today);
+        day.setDate(day.getDate() + i);
+        targetDays.push(day);
+      }
+
+      const dayMap = new Map();
+      hourlyData.forEach((item) => {
+        let timestamp;
+        if (typeof item.dt === 'string') {
+          timestamp = new Date(item.dt).getTime();
+        } else if (typeof item.dt === 'number') {
+          timestamp = item.dt * 1000;
+        } else {
+          return;
+        }
+
+        const date = new Date(timestamp);
+        const itemDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+        // Only include items from the next 7 days starting from today
+        const isTargetDay = targetDays.some(
+          (targetDay) => itemDate.getTime() === targetDay.getTime()
+        );
+        if (!isTargetDay) {
+          return;
+        }
+
+        const dateKey = itemDate.toDateString();
+
+        if (!dayMap.has(dateKey)) {
+          dayMap.set(dateKey, item);
+        }
+      });
+
+      // Sort by date to ensure correct order
+      const sortedEntries = Array.from(dayMap.entries()).sort((a, b) => {
+        const dateA = new Date(a[0]);
+        const dateB = new Date(b[0]);
+        return dateA.getTime() - dateB.getTime();
+      });
+
+      displayData = sortedEntries.map(([dateKey, item]) => item).slice(0, 7);
+    }
+  } else {
+    // Default: show all hourly data
+    displayData = Array.isArray(hourlyData) ? hourlyData.slice(0, 24) : [];
+  }
+
+  if (displayData.length === 0) {
+    container.innerHTML =
+      '<div class="text-center py-8 text-dark-text-secondary text-sm">No forecast data available</div>';
+    return;
+  }
+
+  // Calculate responsive font sizes based on number of cards
+  const cardCount = displayData.length;
+  let timeFontSize = 'text-xs';
+  let tempFontSize = 'text-lg';
+  let detailFontSize = 'text-[9px]';
+  let iconSize = 'w-5 h-5';
+  let paddingSize = 'p-2';
+
+  if (cardCount <= 7) {
+    // Week: 7 cards - larger
+    timeFontSize = 'text-sm';
+    tempFontSize = 'text-xl sm:text-2xl';
+    detailFontSize = 'text-[10px] sm:text-xs';
+    iconSize = 'w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8';
+    paddingSize = 'p-3 sm:p-4';
+  } else if (cardCount <= 12) {
+    // 3 Days: 12 cards - medium
+    timeFontSize = 'text-xs sm:text-sm';
+    tempFontSize = 'text-lg sm:text-xl';
+    detailFontSize = 'text-[9px] sm:text-[10px]';
+    iconSize = 'w-5 h-5 sm:w-6 sm:h-6';
+    paddingSize = 'p-2 sm:p-3';
+  } else {
+    // Today/Tomorrow: 8 cards - smaller
+    timeFontSize = 'text-[10px] sm:text-xs';
+    tempFontSize = 'text-base sm:text-lg';
+    detailFontSize = 'text-[8px] sm:text-[9px]';
+    iconSize = 'w-4 h-4 sm:w-5 sm:h-5';
+    paddingSize = 'p-2';
+  }
+
+  displayData.forEach((item, index) => {
     const clone = template.content.cloneNode(true);
 
+    // Find the root card element - it's the first element child (the div card container)
+    const cardEl = clone.firstElementChild;
+    if (!cardEl || cardEl.tagName !== 'DIV') {
+      return;
+    }
+    // Update card classes
+    cardEl.className = `flex flex-col items-center bg-dark-bg-card rounded-lg ${paddingSize} flex-1 min-w-0 card-hover fade-in`;
+
     const timeEl = clone.getElementById('hourly-time');
-    if (timeEl && item.dt) {
-      timeEl.textContent = formatTime(item.dt * 1000);
+    if (timeEl) {
+      // Apply responsive font size
+      timeEl.className = `${timeFontSize} text-dark-text-secondary mb-2 sm:mb-3 font-medium`;
+
+      if (period === '3days' && item.period && item.date) {
+        // For 3 days view, show day name and date (same format as Week), without period name
+        // item.date is already a Date object from groupByDayPeriods
+        const date = item.date instanceof Date ? item.date : new Date(item.date);
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const dayName = dayNames[date.getDay()];
+        timeEl.textContent = `${dayName}, ${date.getDate()} ${monthNames[date.getMonth()]}`;
+      } else if (period === 'week' && item.dt) {
+        // For week view, show day name and date
+        let timestamp;
+        if (typeof item.dt === 'string') {
+          timestamp = new Date(item.dt).getTime();
+        } else if (typeof item.dt === 'number') {
+          timestamp = item.dt * 1000;
+        } else {
+          timestamp = Date.now();
+        }
+        const date = new Date(timestamp);
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        timeEl.textContent = `${dayNames[date.getDay()]}, ${date.getDate()} ${monthNames[date.getMonth()]}`;
+      } else if (item.dt) {
+        // For today/tomorrow, show time
+        let timestamp;
+        if (typeof item.dt === 'string') {
+          timestamp = new Date(item.dt).getTime();
+        } else if (typeof item.dt === 'number') {
+          timestamp = item.dt * 1000;
+        } else {
+          timestamp = Date.now();
+        }
+        timeEl.textContent = formatTime(timestamp);
+      }
     }
 
     const iconEl = clone.getElementById('hourly-icon');
-    if (iconEl && item.weather && item.weather[0]) {
-      const icon = getWeatherIcon(item.weather[0].description, 'small');
-      iconEl.innerHTML = '';
-      iconEl.appendChild(icon);
+    if (iconEl) {
+      let weatherDesc = '';
+      if (item.weather && item.weather[0]) {
+        weatherDesc = item.weather[0].description;
+      } else if (item.description) {
+        weatherDesc = item.description;
+      }
+
+      if (weatherDesc) {
+        // Create icon with responsive size
+        const icon = getWeatherIcon(weatherDesc, 'small');
+        // Replace size classes with responsive size
+        if (icon.tagName === 'svg') {
+          // For SVG elements, use setAttribute instead of className assignment
+          const currentClassName = icon.className?.baseVal || icon.getAttribute('class') || '';
+          const classNameStr = typeof currentClassName === 'string' ? currentClassName : String(currentClassName);
+          const newClassName = classNameStr.replace(/w-\d+ h-\d+/g, '').trim() + ' ' + iconSize;
+          icon.setAttribute('class', newClassName.trim());
+        } else {
+          const svg = icon.querySelector('svg');
+          if (svg) {
+            // For SVG elements, use setAttribute instead of className assignment
+            const currentClassName = svg.className?.baseVal || svg.getAttribute('class') || '';
+            const classNameStr = typeof currentClassName === 'string' ? currentClassName : String(currentClassName);
+            const newClassName = classNameStr.replace(/w-\d+ h-\d+/g, '').trim() + ' ' + iconSize;
+            svg.setAttribute('class', newClassName.trim());
+          }
+        }
+        iconEl.innerHTML = '';
+        iconEl.appendChild(icon);
+      }
     }
 
     const tempEl = clone.getElementById('hourly-temp');
-    if (tempEl && item.temp !== undefined) {
-      tempEl.textContent = formatTemperature(item.temp);
+    if (tempEl) {
+      // Apply responsive font size
+      tempEl.className = `${tempFontSize} font-bold mb-3 sm:mb-4`;
+      // Handle both 'temp' and 'temperature' fields
+      const temp = item.temp !== undefined ? item.temp : item.temperature;
+      if (temp !== undefined) {
+        tempEl.textContent = formatTemperature(temp);
+      }
     }
+
+    // Update additional weather info with responsive font sizes
+    // Find the details container by looking for the div containing hourly-feels-like
+    const feelsLikeEl = clone.getElementById('hourly-feels-like');
+    const detailsContainer = feelsLikeEl ? feelsLikeEl.closest('div[class*="space-y"]') : null;
+    if (detailsContainer) {
+      detailsContainer.className = `w-full space-y-1 sm:space-y-1.5 pt-2 sm:pt-3 border-t border-dark-bg-secondary`;
+    }
+
+    if (feelsLikeEl) {
+      feelsLikeEl.className = `font-semibold ${detailFontSize}`;
+      const feelsLike = item.feels_like !== undefined ? item.feels_like : item.temp;
+      if (feelsLike !== undefined) {
+        feelsLikeEl.textContent = formatTemperature(feelsLike);
+      }
+    }
+
+    const rainEl = clone.getElementById('hourly-rain');
+    if (rainEl) {
+      rainEl.className = `font-semibold ${detailFontSize}`;
+      const pop = item.pop !== undefined ? item.pop : (item.rain_probability || 0);
+      rainEl.textContent = `${Math.round(pop * 100)}%`;
+    }
+
+    const windEl = clone.getElementById('hourly-wind');
+    if (windEl) {
+      windEl.className = `font-semibold ${detailFontSize}`;
+      const windSpeed = item.wind_speed !== undefined ? item.wind_speed : 0;
+      windEl.textContent = `${windSpeed} km/h`;
+    }
+
+    // Update detail labels
+    const detailLabels = clone.querySelectorAll('.text-dark-text-secondary');
+    detailLabels.forEach((label) => {
+      if (label.textContent === 'Real Feel' || label.textContent === 'Precipitation' || label.textContent === 'Wind') {
+        label.className = `text-dark-text-secondary ${detailFontSize}`;
+      }
+    });
 
     container.appendChild(clone);
   });
@@ -170,7 +665,7 @@ export function updateAirConditions(weatherData, containerId = 'air-conditions-g
       icon: 'thermometer',
     },
     {
-      label: 'Chance of rain',
+      label: 'Chance of precipitation',
       value: weatherData.pop ? `${Math.round(weatherData.pop * 100)}%` : '0%',
       icon: 'raindrop',
     },

@@ -77,6 +77,36 @@ export async function logout() {
 }
 
 /**
+ * Refresh access token
+ */
+export async function refreshToken() {
+  try {
+    const refresh = localStorage.getItem('refresh_token');
+    if (!refresh) {
+      return false;
+    }
+
+    const data = await apiRequest('auth/refresh/', {
+      method: 'POST',
+      body: JSON.stringify({ refresh }),
+    });
+
+    if (data.access) {
+      setAuthToken(data.access);
+      if (data.refresh) {
+        setRefreshToken(data.refresh);
+      }
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    handleApiError(error);
+    return false;
+  }
+}
+
+/**
  * Get current user
  */
 export async function getCurrentUser() {

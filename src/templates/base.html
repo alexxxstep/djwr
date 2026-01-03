@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{% block title %}Django Weather Reminder{% endblock %}</title>
     {% load static %}
+    <link rel="icon" type="image/svg+xml" href="{% static 'favicon.svg' %}" />
+    <link rel="alternate icon" href="{% static 'favicon.svg' %}" />
     <script src="{% static 'bundle.js' %}"></script>
   </head>
   <body class="bg-dark-bg-primary text-dark-text-primary min-h-screen">

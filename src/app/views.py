@@ -8,19 +8,26 @@ from datetime import datetime
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.views.generic import TemplateView
-from drf_spectacular.utils import OpenApiExample, extend_schema
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    extend_schema,
+)
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenBlacklistView, TokenRefreshView
 from social_django.models import UserSocialAuth
 
-from .models import City, User
+from .models import City, Subscription, User
 from .serializers import (
     CityDetailSerializer,
     CitySerializer,
+    SubscriptionCreateSerializer,
+    SubscriptionSerializer,
+    SubscriptionUpdateSerializer,
     UserRegistrationSerializer,
     UserSerializer,
     WeatherDataSerializer,
@@ -98,106 +105,13 @@ class RegisterView(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         """Create user and return JWT tokens."""
-        # #region agent log
-        log_path = str(settings.BASE_DIR / ".cursor" / "debug.log")
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "A",
-                            "location": "views.py:81",
-                            "message": "RegisterView.create entry",
-                            "data": {
-                                "email": request.data.get("email", ""),
-                                "has_password": bool(request.data.get("password")),
-                            },
-                            "timestamp": int(datetime.now().timestamp() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # #region agent log
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "A",
-                            "location": "views.py:84",
-                            "message": "RegisterView serializer validated",
-                            "data": {"validated": True},
-                            "timestamp": int(datetime.now().timestamp() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         user = serializer.save()
-        # #region agent log
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "A",
-                            "location": "views.py:86",
-                            "message": "RegisterView user created",
-                            "data": {
-                                "user_id": user.id,
-                                "email": user.email,
-                                "password_hashed": (
-                                    user.password != request.data.get("password", "")
-                                ),
-                            },
-                            "timestamp": int(datetime.now().timestamp() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
 
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
         access_token = refresh.access_token
-        # #region agent log
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "A",
-                            "location": "views.py:90",
-                            "message": "RegisterView JWT tokens generated",
-                            "data": {
-                                "has_access_token": bool(access_token),
-                                "has_refresh_token": bool(refresh),
-                            },
-                            "timestamp": int(datetime.now().timestamp() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
 
         return Response(
             {
@@ -268,152 +182,25 @@ def login_view(request):
     POST /api/auth/login/
     Authenticates user and returns JWT tokens.
     """
-    # #region agent log
-    log_path = str(settings.BASE_DIR / ".cursor" / "debug.log")
-    try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(
-                json.dumps(
-                    {
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "B",
-                        "location": "views.py:158",
-                        "message": "login_view entry",
-                        "data": {
-                            "email_provided": bool(request.data.get("email")),
-                            "password_provided": bool(request.data.get("password")),
-                        },
-                        "timestamp": int(datetime.now().timestamp() * 1000),
-                    }
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-    # #endregion
     email = request.data.get("email")
     password = request.data.get("password")
 
     if not email or not password:
-        # #region agent log
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "B",
-                            "location": "views.py:163",
-                            "message": "login_view missing fields",
-                            "data": {
-                                "has_email": bool(email),
-                                "has_password": bool(password),
-                            },
-                            "timestamp": int(datetime.now().timestamp() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         return Response(
             {"error": "Email and password are required."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
     normalized_email = email.lower().strip()
-    # #region agent log
-    try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(
-                json.dumps(
-                    {
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "B",
-                        "location": "views.py:170",
-                        "message": "login_view email normalized",
-                        "data": {"original": email, "normalized": normalized_email},
-                        "timestamp": int(datetime.now().timestamp() * 1000),
-                    }
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-    # #endregion
     try:
         user = User.objects.get(email=normalized_email)
-        # #region agent log
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "B",
-                            "location": "views.py:174",
-                            "message": "login_view user found",
-                            "data": {"user_id": user.id, "email": user.email},
-                            "timestamp": int(datetime.now().timestamp() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
     except User.DoesNotExist:
-        # #region agent log
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "B",
-                            "location": "views.py:177",
-                            "message": "login_view user not found",
-                            "data": {"email": normalized_email},
-                            "timestamp": int(datetime.now().timestamp() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         return Response(
             {"error": "Invalid email or password."},
             status=status.HTTP_401_UNAUTHORIZED,
         )
 
     password_valid = user.check_password(password)
-    # #region agent log
-    try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(
-                json.dumps(
-                    {
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "B",
-                        "location": "views.py:185",
-                        "message": "login_view password checked",
-                        "data": {"password_valid": password_valid},
-                        "timestamp": int(datetime.now().timestamp() * 1000),
-                    }
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-    # #endregion
     if not password_valid:
         return Response(
             {"error": "Invalid email or password."},
@@ -423,29 +210,6 @@ def login_view(request):
     # Generate JWT tokens
     refresh = RefreshToken.for_user(user)
     access_token = refresh.access_token
-    # #region agent log
-    try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(
-                json.dumps(
-                    {
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "B",
-                        "location": "views.py:195",
-                        "message": "login_view JWT tokens generated",
-                        "data": {
-                            "has_access_token": bool(access_token),
-                            "has_refresh_token": bool(refresh),
-                        },
-                        "timestamp": int(datetime.now().timestamp() * 1000),
-                    }
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-    # #endregion
 
     return Response(
         {
@@ -561,34 +325,6 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         """Return the current authenticated user."""
-        # #region agent log
-        log_path = str(settings.BASE_DIR / ".cursor" / "debug.log")
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "C",
-                            "location": "views.py:298",
-                            "message": "UserProfileView.get_object",
-                            "data": {
-                                "user_authenticated": self.request.user.is_authenticated,
-                                "user_id": (
-                                    self.request.user.id
-                                    if self.request.user.is_authenticated
-                                    else None
-                                ),
-                            },
-                            "timestamp": int(datetime.now().timestamp() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         return self.request.user
 
 
@@ -857,16 +593,19 @@ class CityDetailView(generics.RetrieveAPIView):
 @extend_schema(
     tags=["Cities"],
     summary="Search Cities",
-    description="Search cities by name using database-first approach.",
+    description="Search cities by name. Returns cities from database or API results (without creating in DB). Cities are created only when user creates a subscription.",
     parameters=[
-        {
-            "name": "q",
-            "in": "query",
-            "required": True,
-            "schema": {"type": "string"},
-            "description": "City name to search for",
-            "example": "Kyiv",
-        }
+        OpenApiParameter(
+            name="q",
+            type=str,
+            location=OpenApiParameter.QUERY,
+            required=True,
+            description="City name to search for",
+            examples=[
+                OpenApiExample("Kyiv", value="Kyiv"),
+                OpenApiExample("London", value="London"),
+            ],
+        )
     ],
     responses={
         200: CitySerializer(many=True),
@@ -885,6 +624,8 @@ def city_search_view(request):
     GET /api/cities/search/?q={query}
     Searches cities using database-first approach.
     Falls back to API if not found in database.
+    Does NOT create cities in database - only returns results for user selection.
+    Cities are created only when user creates a subscription.
     """
     query = request.query_params.get("q", "").strip()
 
@@ -895,19 +636,29 @@ def city_search_view(request):
         )
 
     city_service = CityService()
-    cities = city_service.search_cities(query)
+    # Search without creating cities in DB - only return results for user selection
+    results = city_service.search_cities(query, create_in_db=False)
 
-    if not cities:
+    if not results:
         return Response(
             {"results": [], "count": 0, "message": f"No cities found for '{query}'"},
             status=status.HTTP_200_OK,
         )
 
-    serializer = CitySerializer(cities, many=True)
-    return Response(
-        {"results": serializer.data, "count": len(cities)},
-        status=status.HTTP_200_OK,
-    )
+    # Check if results are City objects (from DB) or dictionaries (from API)
+    if results and isinstance(results[0], dict):
+        # API results - return as dictionaries (no DB creation)
+        return Response(
+            {"results": results, "count": len(results)},
+            status=status.HTTP_200_OK,
+        )
+    else:
+        # Database results - serialize City objects
+        serializer = CitySerializer(results, many=True)
+        return Response(
+            {"results": serializer.data, "count": len(results)},
+            status=status.HTTP_200_OK,
+        )
 
 
 # Weather Views
@@ -970,60 +721,7 @@ def weather_view(request, city_id):
     Period options: current, today, tomorrow, 3days, week, hourly
     Default period: current
     """
-    # #region agent log
-    import json as json_module
-
-    from django.utils import timezone as tz
-
-    try:
-        log_path = settings.BASE_DIR / ".cursor" / "debug.log"
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(
-                json_module.dumps(
-                    {
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "A",
-                        "location": "views.py:973",
-                        "message": "weather_view entry - FIRST LINE",
-                        "data": {
-                            "city_id": city_id,
-                            "base_dir": str(settings.BASE_DIR),
-                        },
-                        "timestamp": int(tz.now().timestamp() * 1000),
-                    }
-                )
-                + "\n"
-            )
-    except Exception as e:
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.error(f"Debug log write failed: {e}")
-    # #endregion
-
     period = request.query_params.get("period", "current").strip()
-
-    # #region agent log
-    try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(
-                json_module.dumps(
-                    {
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "A",
-                        "location": "views.py:995",
-                        "message": "weather_view after period extraction",
-                        "data": {"city_id": city_id, "period": period},
-                        "timestamp": int(tz.now().timestamp() * 1000),
-                    }
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-    # #endregion
 
     # Validate period
     valid_periods = [
@@ -1047,58 +745,12 @@ def weather_view(request, city_id):
     city = get_object_or_404(City, pk=city_id)
 
     # Fetch weather data
-    # #region agent log
-    try:
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(
-                json_module.dumps(
-                    {
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "A",
-                        "location": "views.py:1045",
-                        "message": "weather_view before service call",
-                        "data": {"city_id": city.id, "period": period},
-                        "timestamp": int(tz.now().timestamp() * 1000),
-                    }
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-    # #endregion
     weather_service = WeatherService()
     try:
         if period == "current":
             weather_data = weather_service.fetch_current_weather(city)
         else:
             weather_data = weather_service.fetch_forecast(city, period)
-        # #region agent log
-        try:
-            with open(log_path, "a", encoding="utf-8") as f:
-                f.write(
-                    json_module.dumps(
-                        {
-                            "sessionId": "debug-session",
-                            "runId": "run1",
-                            "hypothesisId": "A",
-                            "location": "views.py:1069",
-                            "message": "weather_view after fetch - type check",
-                            "data": {
-                                "city_id": city.id,
-                                "period": period,
-                                "weather_data_type": type(weather_data).__name__,
-                                "is_list": isinstance(weather_data, list),
-                                "is_dict": isinstance(weather_data, dict),
-                            },
-                            "timestamp": int(tz.now().timestamp() * 1000),
-                        }
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
     except Exception as e:
         import logging
 
@@ -1111,29 +763,6 @@ def weather_view(request, city_id):
 
     # Add city info to response
     # Handle both dict (single forecast) and list (hourly forecast)
-    # #region agent log
-    log_path = settings.BASE_DIR / ".cursor" / "debug.log"
-    with open(log_path, "a") as f:
-        f.write(
-            json_module.dumps(
-                {
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "A",
-                    "location": "views.py:1015",
-                    "message": "weather_view before response construction",
-                    "data": {
-                        "city_id": city.id,
-                        "period": period,
-                        "weather_data_type": type(weather_data).__name__,
-                        "is_list": isinstance(weather_data, list),
-                    },
-                    "timestamp": int(tz.now().timestamp() * 1000),
-                }
-            )
-            + "\n"
-        )
-    # #endregion
     if isinstance(weather_data, list):
         # For hourly forecasts, return list with city info in each item
         response_data = [
@@ -1206,3 +835,105 @@ def weather_history_view(request, city_id):
 
     serializer = WeatherDataSerializer(paginated_history, many=True)
     return paginator.get_paginated_response(serializer.data)
+
+
+# Subscription Permissions
+class IsSubscriptionOwner(BasePermission):
+    """
+    Permission class to check if user owns the subscription.
+
+    Allows access only if the subscription belongs to the requesting user.
+    """
+
+    def has_object_permission(self, request, view, obj):
+        """Check if the subscription belongs to the requesting user."""
+        return obj.user == request.user
+
+
+# Subscription Views
+@extend_schema(
+    tags=["Subscriptions"],
+    summary="List Subscriptions",
+    description="Get paginated list of current user's subscriptions.",
+    responses={
+        200: SubscriptionSerializer(many=True),
+        401: OpenApiExample(
+            "Unauthorized",
+            value={"detail": "Authentication credentials were not provided."},
+        ),
+    },
+)
+class SubscriptionListCreateView(generics.ListCreateAPIView):
+    """
+    Subscription list and create endpoint.
+
+    GET /api/subscriptions/ - Returns paginated list of user's subscriptions.
+    POST /api/subscriptions/ - Creates a new subscription.
+    Requires authentication.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Return subscriptions for the current user only."""
+        return Subscription.objects.filter(user=self.request.user).select_related(
+            "city", "user"
+        )
+
+    def get_serializer_class(self):
+        """Return appropriate serializer based on request method."""
+        if self.request.method == "POST":
+            return SubscriptionCreateSerializer
+        return SubscriptionSerializer
+
+    def perform_create(self, serializer):
+        """Set user automatically from request."""
+        serializer.save(user=self.request.user)
+
+
+@extend_schema(
+    tags=["Subscriptions"],
+    summary="Subscription Details, Update, Delete",
+    description=(
+        "Get, update, or delete subscription. " "Only accessible by subscription owner."
+    ),
+    responses={
+        200: SubscriptionSerializer,
+        204: OpenApiExample("No Content", value=None),
+        400: OpenApiExample(
+            "Validation Error",
+            value={"period": ["Period must be one of: 1, 3, 6, 12"]},
+        ),
+        404: OpenApiExample(
+            "Not Found",
+            value={"detail": "Not found."},
+        ),
+        401: OpenApiExample(
+            "Unauthorized",
+            value={"detail": "Authentication credentials were not provided."},
+        ),
+    },
+)
+class SubscriptionDetailUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Subscription detail, update, and delete endpoint.
+
+    GET /api/subscriptions/{id}/ - Returns subscription details.
+    PATCH /api/subscriptions/{id}/ - Updates subscription.
+    DELETE /api/subscriptions/{id}/ - Deletes subscription.
+    Only accessible by subscription owner.
+    """
+
+    permission_classes = [IsAuthenticated, IsSubscriptionOwner]
+
+    def get_queryset(self):
+        """Return only subscriptions belonging to the current user."""
+        return Subscription.objects.filter(user=self.request.user).select_related(
+            "city", "user"
+        )
+
+    def get_serializer_class(self):
+        """Return appropriate serializer based on request method."""
+        if self.request.method in ["PATCH", "PUT"]:
+            return SubscriptionUpdateSerializer
+        return SubscriptionSerializer

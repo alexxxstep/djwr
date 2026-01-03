@@ -122,6 +122,7 @@ class Subscription(BaseModel):
         verbose_name = "Subscription"
         verbose_name_plural = "Subscriptions"
         unique_together = [["user", "city"]]
+        ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["user", "is_active"]),
             models.Index(fields=["is_active", "last_notified_at"]),

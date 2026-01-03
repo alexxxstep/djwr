@@ -1,29 +1,50 @@
 <!-- Current Weather Card (Central Column) -->
-<div class="card-gradient p-6 mb-6 fade-in">
-  <div id="current-weather-content">
+<div class="card-gradient p-4 mb-4 fade-in" style="height: calc((100vh - 200px) * 3 / 8); min-height: 150px; max-height: 200px;">
+  <div id="current-weather-content" class="h-full flex flex-col">
     <!-- Loading state -->
-    <div class="text-center py-12">
-      <div class="spinner-large mx-auto mb-4"></div>
-      <p class="text-dark-text-secondary pulse-slow">Loading weather data...</p>
+    <div class="text-center py-8 flex items-center justify-center h-full">
+      <div>
+        <div class="spinner-large mx-auto mb-4"></div>
+        <p class="text-dark-text-secondary pulse-slow">Loading weather data...</p>
+      </div>
     </div>
   </div>
 </div>
 
 <!-- Template for weather content (used by JavaScript) -->
 <template id="weather-card-template">
-  <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
+  <div class="flex flex-col md:flex-row justify-between items-start md:items-center h-full">
     <div class="flex-1">
-      <div class="text-sm text-dark-text-secondary mb-2" id="weather-date"></div>
-      <h1 class="text-4xl font-bold mb-2" id="weather-city"></h1>
-      <p class="text-lg text-dark-text-secondary mb-4" id="weather-description"></p>
-      <div class="flex items-baseline gap-4">
-        <span class="text-6xl font-bold" id="weather-temp"></span>
-        <div class="text-sm text-dark-text-secondary">
+      <div class="text-xs text-dark-text-secondary mb-1" id="weather-date"></div>
+      <h1 class="text-2xl md:text-3xl font-bold mb-1" id="weather-city"></h1>
+      <p class="text-sm md:text-base text-dark-text-secondary mb-2" id="weather-description"></p>
+      <div class="flex items-baseline gap-3 mb-3">
+        <span class="text-4xl md:text-5xl font-bold" id="weather-temp"></span>
+        <div class="text-xs text-dark-text-secondary">
           <span id="weather-high"></span> / <span id="weather-low"></span>
         </div>
       </div>
+      <!-- Air Conditions Info -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-dark-bg-secondary">
+        <div class="flex flex-col">
+          <span class="text-[10px] md:text-xs text-dark-text-secondary mb-0.5">Real Feel</span>
+          <span class="text-sm md:text-base font-semibold" id="weather-feels-like">--</span>
+        </div>
+        <div class="flex flex-col">
+          <span class="text-[10px] md:text-xs text-dark-text-secondary mb-0.5">Chance of precipitation</span>
+          <span class="text-sm md:text-base font-semibold" id="weather-rain">--</span>
+        </div>
+        <div class="flex flex-col">
+          <span class="text-[10px] md:text-xs text-dark-text-secondary mb-0.5">Wind</span>
+          <span class="text-sm md:text-base font-semibold" id="weather-wind">--</span>
+        </div>
+        <div class="flex flex-col">
+          <span class="text-[10px] md:text-xs text-dark-text-secondary mb-0.5">UV Index</span>
+          <span class="text-sm md:text-base font-semibold" id="weather-uv">--</span>
+        </div>
+      </div>
     </div>
-    <div class="mt-4 md:mt-0" id="weather-icon-large"></div>
+    <div class="mt-2 md:mt-0 flex-shrink-0" id="weather-icon-large"></div>
   </div>
 </template>
 

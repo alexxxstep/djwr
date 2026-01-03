@@ -82,7 +82,8 @@ export async function apiRequest(url, options = {}) {
       }
     }
 
-    return handleResponse(response);
+    const result = await handleResponse(response);
+    return result;
   } catch (error) {
     console.error('API request failed:', error);
     throw error;
@@ -114,7 +115,8 @@ async function handleResponse(response) {
 
   if (contentType?.includes('application/json')) {
     try {
-      return await response.json();
+      const jsonData = await response.json();
+      return jsonData;
     } catch (e) {
       return null;
     }

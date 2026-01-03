@@ -23,7 +23,7 @@ class CityService:
         """Initialize CityService with WeatherService."""
         self.weather_service = WeatherService()
 
-    def search_cities(self, query: str) -> list[City]:
+    def search_cities(self, query: str, create_in_db: bool = False) -> list[dict | City]:
         """
         Search cities using database-first approach.
 
@@ -31,17 +31,15 @@ class CityService:
         1. First query local database (City.objects.filter(name__icontains=query))
         2. If cities found: Return database results immediately
         3. If not found: Call WeatherService.search_cities(query)
-        4. For each city from API:
-           - Check if city exists in database (by name + country)
-           - If not exists: Create new City record using get_or_create
-           - If exists: Use existing record
-        5. Return list of City objects (all from database)
+        4. If create_in_db=True: Create City records from API results
+        5. If create_in_db=False: Return API data as dictionaries (no DB creation)
 
         Args:
             query: Search query (city name)
+            create_in_db: If True, create cities in database. If False, return API data only.
 
         Returns:
-            List of City objects from database
+            List of City objects (if from DB or create_in_db=True) or dictionaries (if from API)
         """
         if not query or not query.strip():
             return []
@@ -66,21 +64,26 @@ class CityService:
             logger.info(f"No cities found for '{query}'")
             return []
 
-        # Step 3: Create City records from API results
-        result_cities = []
-        for city_data in api_cities:
-            city, created = self.get_or_create_city(
-                name=city_data["name"],
-                country=city_data["country"],
-                lat=city_data["lat"],
-                lon=city_data["lon"],
-            )
-            result_cities.append(city)
-            if created:
-                logger.debug(f"Created new city: {city.name}, {city.country}")
+        # Step 3: If create_in_db=True, create City records from API results
+        if create_in_db:
+            result_cities = []
+            for city_data in api_cities:
+                city, created = self.get_or_create_city(
+                    name=city_data["name"],
+                    country=city_data["country"],
+                    lat=city_data["lat"],
+                    lon=city_data["lon"],
+                )
+                result_cities.append(city)
+                if created:
+                    logger.debug(f"Created new city: {city.name}, {city.country}")
 
-        logger.info(f"Created/retrieved {len(result_cities)} cities for '{query}'")
-        return result_cities
+            logger.info(f"Created/retrieved {len(result_cities)} cities for '{query}'")
+            return result_cities
+        else:
+            # Return API data as dictionaries (no DB creation)
+            logger.info(f"Returning {len(api_cities)} cities from API (not creating in DB)")
+            return api_cities
 
     def get_or_create_city(
         self, name: str, country: str, lat: float, lon: float

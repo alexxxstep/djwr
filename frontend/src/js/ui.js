@@ -2,7 +2,7 @@
  * UI interactions and navigation
  */
 
-import { getWeatherIcon, formatTemperature, formatDate } from './icons.js';
+import { getWeatherIcon, formatTemperature, formatDate, formatTime } from './icons.js';
 
 /**
  * Initialize sidebar navigation
@@ -140,15 +140,14 @@ export function updateSelectedCityDetail(cityId, weatherData) {
 
 /**
  * Update city list item
+ * Note: Time is not updated here - it's updated by updateCitiesTime() every minute
  */
 export function updateCityListItem(cityId, weatherData) {
   const listItem = document.querySelector(`.city-list-item[data-city-id="${cityId}"]`);
   if (!listItem || !weatherData) return;
 
-  const timeEl = listItem.querySelector('#list-item-time');
-  if (timeEl && weatherData.fetched_at) {
-    timeEl.textContent = formatTime(weatherData.fetched_at);
-  }
+  // Don't update time here - it's updated by updateCitiesTime() every minute
+  // Time should show current local time, not fetched_at time
 
   const iconEl = listItem.querySelector('#list-item-icon');
   if (iconEl && weatherData.description) {
@@ -199,12 +198,7 @@ export function toggleAirConditions() {
  * Initialize city navigation
  */
 export function initCityNavigation() {
-  // This will be called when subscriptions are loaded
-  document.addEventListener('citySelected', (e) => {
-    const { cityId } = e.detail;
-    if (cityId) {
-      handleCitySelect(cityId);
-    }
-  });
+  // City selection is handled in main.js with debouncing
+  // No need for duplicate handler here
 }
 
