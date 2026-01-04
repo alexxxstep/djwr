@@ -343,6 +343,9 @@ WEATHER_API_KEY = os.environ.get("WEATHER_API_KEY", "")
 WEATHER_API_URL = os.environ.get(
     "WEATHER_API_URL", "https://api.openweathermap.org/data/3.0"
 )
+WEATHER_GEOCODING_URL = os.environ.get(
+    "WEATHER_GEOCODING_URL", "https://api.openweathermap.org/geo/1.0/direct"
+)
 
 # Django Debug Toolbar settings (development only)
 if DEBUG:

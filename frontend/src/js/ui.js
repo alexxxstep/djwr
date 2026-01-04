@@ -1,8 +1,10 @@
 /**
  * UI interactions and navigation
+ * Refactored version - clean implementation
  */
 
-import { getWeatherIcon, formatTemperature, formatDate, formatTime } from './icons.js';
+import { getWeatherIcon, formatTemperature, formatDate } from './icons.js';
+import { getFirstWeatherItem } from './weather.js';
 
 /**
  * Initialize sidebar navigation
@@ -13,6 +15,8 @@ export function initSidebar() {
 
   navItems.forEach((item) => {
     const navType = item.getAttribute('data-nav');
+
+    // Set active state based on current path
     if (navType === 'weather' && currentPath === '/') {
       item.classList.add('active');
     } else if (currentPath.includes(`/${navType}/`)) {
@@ -28,14 +32,11 @@ export function initSidebar() {
 
 /**
  * Handle active navigation state
+ * @param {string} navType - Navigation type
  */
 export function handleActiveNav(navType) {
-  const navItems = document.querySelectorAll('.nav-item');
-  navItems.forEach((item) => {
-    item.classList.remove('active');
-    if (item.getAttribute('data-nav') === navType) {
-      item.classList.add('active');
-    }
+  document.querySelectorAll('.nav-item').forEach((item) => {
+    item.classList.toggle('active', item.getAttribute('data-nav') === navType);
   });
 }
 
@@ -43,9 +44,7 @@ export function handleActiveNav(navType) {
  * Initialize period navigation
  */
 export function initPeriodNavigation() {
-  const periodButtons = document.querySelectorAll('.period-btn');
-
-  periodButtons.forEach((button) => {
+  document.querySelectorAll('.period-btn').forEach((button) => {
     button.addEventListener('click', () => {
       const period = button.getAttribute('data-period');
       handlePeriodSelect(period);
@@ -55,78 +54,64 @@ export function initPeriodNavigation() {
 
 /**
  * Handle period selection
+ * @param {string} period - Selected period
  */
 export function handlePeriodSelect(period) {
   // Update active state
-  const periodButtons = document.querySelectorAll('.period-btn');
-  periodButtons.forEach((btn) => {
-    btn.classList.remove('active');
-    if (btn.getAttribute('data-period') === period) {
-      btn.classList.add('active');
-    }
+  document.querySelectorAll('.period-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.getAttribute('data-period') === period);
   });
 
   // Dispatch event
-  const event = new CustomEvent('periodSelected', { detail: { period } });
-  document.dispatchEvent(event);
+  document.dispatchEvent(new CustomEvent('periodSelected', { detail: { period } }));
 }
 
 /**
  * Handle city selection
+ * @param {number} cityId - City ID
  */
 export function handleCitySelect(cityId) {
-  // Dispatch event for city selection
-  const event = new CustomEvent('citySelected', { detail: { cityId } });
-  document.dispatchEvent(event);
+  document.dispatchEvent(new CustomEvent('citySelected', { detail: { cityId } }));
 }
 
 /**
  * Update selected city detail card
+ * @param {number} cityId - City ID
+ * @param {Object} response - Weather API response
  */
-export function updateSelectedCityDetail(cityId, weatherData) {
+export function updateSelectedCityDetail(cityId, response) {
   const container = document.getElementById('selected-city-detail');
-  if (!container || !weatherData) return;
+  if (!container || !response) return;
 
   const template = document.getElementById('city-detail-template');
   if (!template) return;
 
+  const weatherData = getFirstWeatherItem(response);
+  if (!weatherData) return;
+
   const clone = template.content.cloneNode(true);
 
-  // Update date
-  const dateEl = clone.getElementById('detail-date');
-  if (dateEl && weatherData.fetched_at) {
-    dateEl.textContent = formatDate(weatherData.fetched_at);
+  // Date
+  setElementText(clone, 'detail-date', response.meta?.fetched_at ? formatDate(response.meta.fetched_at) : '');
+
+  // City name
+  setElementText(clone, 'detail-city', response.city?.name || '');
+
+  // Description
+  setElementText(clone, 'detail-description', weatherData.description || '');
+
+  // Temperature
+  setElementText(clone, 'detail-temp', weatherData.temp !== undefined ? formatTemperature(weatherData.temp) : '--');
+
+  // High/Low
+  if (weatherData.temp_max !== undefined) {
+    setElementText(clone, 'detail-high', `H ${formatTemperature(weatherData.temp_max)}`);
+  }
+  if (weatherData.temp_min !== undefined) {
+    setElementText(clone, 'detail-low', `L ${formatTemperature(weatherData.temp_min)}`);
   }
 
-  // Update city name
-  const cityEl = clone.getElementById('detail-city');
-  if (cityEl && weatherData.city) {
-    cityEl.textContent = weatherData.city.name || weatherData.city;
-  }
-
-  // Update description
-  const descEl = clone.getElementById('detail-description');
-  if (descEl && weatherData.description) {
-    descEl.textContent = weatherData.description;
-  }
-
-  // Update temperature
-  const tempEl = clone.getElementById('detail-temp');
-  if (tempEl && weatherData.temperature !== undefined) {
-    tempEl.textContent = formatTemperature(weatherData.temperature);
-  }
-
-  // Update high/low
-  const highEl = clone.getElementById('detail-high');
-  const lowEl = clone.getElementById('detail-low');
-  if (highEl && weatherData.temp_max !== undefined) {
-    highEl.textContent = `H ${formatTemperature(weatherData.temp_max)}`;
-  }
-  if (lowEl && weatherData.temp_min !== undefined) {
-    lowEl.textContent = `L ${formatTemperature(weatherData.temp_min)}`;
-  }
-
-  // Update icon
+  // Icon
   const iconEl = clone.getElementById('detail-icon-large');
   if (iconEl && weatherData.description) {
     const icon = getWeatherIcon(weatherData.description, 'large');
@@ -140,15 +125,17 @@ export function updateSelectedCityDetail(cityId, weatherData) {
 
 /**
  * Update city list item
- * Note: Time is not updated here - it's updated by updateCitiesTime() every minute
+ * @param {number} cityId - City ID
+ * @param {Object} response - Weather API response
  */
-export function updateCityListItem(cityId, weatherData) {
+export function updateCityListItem(cityId, response) {
   const listItem = document.querySelector(`.city-list-item[data-city-id="${cityId}"]`);
-  if (!listItem || !weatherData) return;
+  if (!listItem || !response) return;
 
-  // Don't update time here - it's updated by updateCitiesTime() every minute
-  // Time should show current local time, not fetched_at time
+  const weatherData = getFirstWeatherItem(response);
+  if (!weatherData) return;
 
+  // Icon
   const iconEl = listItem.querySelector('#list-item-icon');
   if (iconEl && weatherData.description) {
     const icon = getWeatherIcon(weatherData.description, 'small');
@@ -156,27 +143,35 @@ export function updateCityListItem(cityId, weatherData) {
     iconEl.appendChild(icon);
   }
 
+  // Temperature
   const tempEl = listItem.querySelector('#list-item-temp');
-  if (tempEl && weatherData.temperature !== undefined) {
-    tempEl.textContent = formatTemperature(weatherData.temperature);
+  if (tempEl && weatherData.temp !== undefined) {
+    tempEl.textContent = formatTemperature(weatherData.temp);
   }
 }
 
 /**
- * Scroll hourly forecast horizontally
+ * Set element text helper
+ * @param {DocumentFragment} fragment - Template fragment
+ * @param {string} id - Element ID
+ * @param {string} text - Text content
+ */
+function setElementText(fragment, id, text) {
+  const el = fragment.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+/**
+ * Scroll hourly forecast
+ * @param {string} direction - 'left' or 'right'
  */
 export function scrollHourlyForecast(direction = 'right') {
   const container = document.getElementById('hourly-forecast-container');
   if (!container) return;
 
   const scrollAmount = 200;
-  const currentScroll = container.scrollLeft;
-  const newScroll = direction === 'right'
-    ? currentScroll + scrollAmount
-    : currentScroll - scrollAmount;
-
   container.scrollTo({
-    left: newScroll,
+    left: container.scrollLeft + (direction === 'right' ? scrollAmount : -scrollAmount),
     behavior: 'smooth',
   });
 }
@@ -186,19 +181,175 @@ export function scrollHourlyForecast(direction = 'right') {
  */
 export function toggleAirConditions() {
   const seeMoreBtn = document.getElementById('see-more-btn');
-  if (!seeMoreBtn) return;
-
-  seeMoreBtn.addEventListener('click', () => {
-    // Toggle expanded view (can be implemented later)
-    console.log('See more clicked');
-  });
+  if (seeMoreBtn) {
+    seeMoreBtn.addEventListener('click', () => {
+      console.log('See more clicked');
+    });
+  }
 }
 
 /**
  * Initialize city navigation
  */
 export function initCityNavigation() {
-  // City selection is handled in main.js with debouncing
-  // No need for duplicate handler here
+  // City selection handled in main.js
 }
 
+// Store event handlers for drag-to-scroll to allow cleanup
+let dragScrollHandlers = {
+  container: null,
+  handlers: null,
+};
+
+/**
+ * Initialize drag-to-scroll for hourly forecast container
+ */
+export function initDragToScroll() {
+  const container = document.getElementById('hourly-forecast-container');
+  if (!container) return;
+
+  // Remove existing handlers if container changed or already initialized
+  if (dragScrollHandlers.container && dragScrollHandlers.container === container && dragScrollHandlers.handlers) {
+    // Already initialized for this container, skip
+    return;
+  }
+
+  // Clean up previous handlers if container changed
+  if (dragScrollHandlers.container && dragScrollHandlers.container !== container && dragScrollHandlers.handlers) {
+    removeDragScrollHandlers(dragScrollHandlers.container, dragScrollHandlers.handlers);
+  }
+
+  let isDown = false;
+  let startX;
+  let scrollLeft;
+
+  // Create handler functions
+  const handleMouseDown = (e) => {
+    isDown = true;
+    container.style.cursor = 'grabbing';
+    startX = e.pageX - container.offsetLeft;
+    scrollLeft = container.scrollLeft;
+    e.preventDefault();
+  };
+
+  const handleMouseLeave = () => {
+    isDown = false;
+    container.style.cursor = 'grab';
+  };
+
+  const handleMouseUp = () => {
+    isDown = false;
+    container.style.cursor = 'grab';
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDown) return;
+    e.preventDefault();
+    const x = e.pageX - container.offsetLeft;
+    const walk = (x - startX) * 1.5; // Scroll speed multiplier
+    container.scrollLeft = scrollLeft - walk;
+  };
+
+  const handleSelectStart = (e) => {
+    if (isDown) {
+      e.preventDefault();
+    }
+  };
+
+  // Store handlers
+  const handlers = {
+    mousedown: handleMouseDown,
+    mouseleave: handleMouseLeave,
+    mouseup: handleMouseUp,
+    mousemove: handleMouseMove,
+    selectstart: handleSelectStart,
+  };
+
+  // Add grab cursor on hover
+  container.style.cursor = 'grab';
+  container.style.userSelect = 'none';
+
+  // Hide scrollbar but keep functionality
+  container.style.scrollbarWidth = 'none'; // Firefox
+  container.style.msOverflowStyle = 'none'; // IE/Edge
+
+  // Add event listeners
+  container.addEventListener('mousedown', handlers.mousedown);
+  container.addEventListener('mouseleave', handlers.mouseleave);
+  container.addEventListener('mouseup', handlers.mouseup);
+  container.addEventListener('mousemove', handlers.mousemove);
+  container.addEventListener('selectstart', handlers.selectstart);
+
+  // Store for cleanup
+  dragScrollHandlers.container = container;
+  dragScrollHandlers.handlers = handlers;
+}
+
+/**
+ * Remove drag-to-scroll event handlers
+ */
+function removeDragScrollHandlers(container, handlers) {
+  if (!container || !handlers) return;
+  container.removeEventListener('mousedown', handlers.mousedown);
+  container.removeEventListener('mouseleave', handlers.mouseleave);
+  container.removeEventListener('mouseup', handlers.mouseup);
+  container.removeEventListener('mousemove', handlers.mousemove);
+  container.removeEventListener('selectstart', handlers.selectstart);
+}
+
+/**
+ * Initialize vertical drag-to-scroll for cities list container
+ */
+export function initCitiesListDragScroll() {
+  const container = document.getElementById('cities-panel-scroll');
+  if (!container) return;
+
+  // Prevent duplicate initialization
+  if (container.dataset.dragScrollInitialized === 'true') return;
+  container.dataset.dragScrollInitialized = 'true';
+
+  let isDown = false;
+  let startY;
+  let scrollTop;
+
+  // Add grab cursor on hover
+  container.style.cursor = 'grab';
+  container.style.userSelect = 'none';
+
+  // Hide scrollbar but keep functionality
+  container.style.scrollbarWidth = 'none'; // Firefox
+  container.style.msOverflowStyle = 'none'; // IE/Edge
+
+  container.addEventListener('mousedown', (e) => {
+    isDown = true;
+    container.style.cursor = 'grabbing';
+    startY = e.pageY - container.offsetTop;
+    scrollTop = container.scrollTop;
+    e.preventDefault();
+  });
+
+  container.addEventListener('mouseleave', () => {
+    isDown = false;
+    container.style.cursor = 'grab';
+  });
+
+  container.addEventListener('mouseup', () => {
+    isDown = false;
+    container.style.cursor = 'grab';
+  });
+
+  container.addEventListener('mousemove', (e) => {
+    if (!isDown) return;
+    e.preventDefault();
+    const y = e.pageY - container.offsetTop;
+    const walk = (y - startY) * 1.5; // Scroll speed multiplier
+    container.scrollTop = scrollTop - walk;
+  });
+
+  // Prevent text selection while dragging
+  container.addEventListener('selectstart', (e) => {
+    if (isDown) {
+      e.preventDefault();
+    }
+  });
+}

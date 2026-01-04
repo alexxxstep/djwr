@@ -33,6 +33,16 @@
     @apply bg-accent-blue/50;
   }
 
+  /* Hide scrollbar for drag-scroll containers */
+  .drag-scroll {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+  .drag-scroll::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
+
   /* Card gradient with hover effect */
   .card-gradient {
     @apply bg-gradient-card rounded-2xl shadow-card transition-all duration-300;

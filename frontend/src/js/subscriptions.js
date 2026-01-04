@@ -1,25 +1,43 @@
 /**
  * Subscriptions management
+ * Refactored version - clean, uses new API format
  */
 
-import { apiRequest, handleApiError } from './api.js';
-import { fetchCurrentWeather } from './weather.js';
+import { apiGet, apiPost, apiPatch, apiDelete, handleApiError } from './api.js';
+import { API_ENDPOINTS, VALID_PERIODS } from './config.js';
+import cache, { Cache } from './cache.js';
+import { fetchCurrentWeather, getFirstWeatherItem } from './weather.js';
 import { getWeatherIcon, formatTemperature, formatTime } from './icons.js';
+import { initCitiesListDragScroll } from './ui.js';
 
+// State
 let currentSelectedCityId = null;
-let isSelectingCity = false; // Prevent multiple simultaneous selections
+let isSelectingCity = false;
+let timeUpdateInterval = null;
 
 /**
  * Get user subscriptions
+ * @param {boolean} useCache - Whether to use cache
+ * @returns {Promise<Array>} Array of subscription objects
  */
-export async function getUserSubscriptions() {
+export async function getUserSubscriptions(useCache = true) {
+  const cacheKey = Cache.subscriptionsKey();
+
+  if (useCache) {
+    const cached = cache.get(cacheKey);
+    if (cached) return cached;
+  }
+
   try {
-    const data = await apiRequest('subscriptions/');
-    // Handle paginated response (results) or direct array
-    return data.results || (Array.isArray(data) ? data : []);
+    const response = await apiGet(API_ENDPOINTS.subscriptions);
+    const subscriptions = response.results || (Array.isArray(response) ? response : []);
+
+    // Cache for 1 minute
+    cache.set(cacheKey, subscriptions, 60);
+
+    return subscriptions;
   } catch (error) {
-    if (error.message.includes('401') || error.status === 401) {
-      // User not authenticated, return empty array
+    if (error.status === 401) {
       return [];
     }
     handleApiError(error);
@@ -29,6 +47,7 @@ export async function getUserSubscriptions() {
 
 /**
  * Load subscribed cities with current weather
+ * @returns {Promise<Array>} Array of { subscription, city, weather } objects
  */
 export async function loadSubscribedCitiesWithWeather() {
   try {
@@ -38,14 +57,16 @@ export async function loadSubscribedCitiesWithWeather() {
       return [];
     }
 
+    // Fetch weather for all cities in parallel
     const citiesData = await Promise.all(
       subscriptions.map(async (subscription) => {
         try {
-          const weather = await fetchCurrentWeather(subscription.city.id);
+          const weatherResponse = await fetchCurrentWeather(subscription.city.id);
           return {
             subscription,
             city: subscription.city,
-            weather,
+            weather: getFirstWeatherItem(weatherResponse),
+            timezone_offset: weatherResponse?.timezone_offset || 0,
           };
         } catch (error) {
           console.error(`Failed to load weather for city ${subscription.city.id}:`, error);
@@ -53,6 +74,7 @@ export async function loadSubscribedCitiesWithWeather() {
             subscription,
             city: subscription.city,
             weather: null,
+            timezone_offset: 0,
           };
         }
       })
@@ -67,6 +89,7 @@ export async function loadSubscribedCitiesWithWeather() {
 
 /**
  * Render subscribed cities list
+ * @param {Array} citiesData - Array of { subscription, city, weather } objects
  */
 export function renderSubscribedCitiesList(citiesData) {
   const listContainer = document.getElementById('subscribed-cities-list');
@@ -98,70 +121,60 @@ export function renderSubscribedCitiesList(citiesData) {
         listItem.classList.add('active');
       }
 
-      // Add click handler with debouncing
-      let clickTimeout = null;
+      // Click handler
       listItem.addEventListener('click', () => {
-        // Debounce clicks - ignore if clicked within 300ms
-        if (clickTimeout) {
-          clearTimeout(clickTimeout);
-        }
-        clickTimeout = setTimeout(() => {
-          selectCityFromList(item.city.id);
-        }, 100);
+        selectCityFromList(item.city.id);
       });
+
+      // Store city data for time updates (include timezone_offset from weather response)
+      listItem.setAttribute('data-city', JSON.stringify({
+        country: item.city.country,
+        name: item.city.name,
+        latitude: item.city.latitude,
+        longitude: item.city.longitude,
+        timezone_offset: item.timezone_offset || 0,
+      }));
     }
 
+    // City name with country code
     const cityEl = clone.getElementById('list-item-city');
     if (cityEl) {
-      cityEl.textContent = item.city.name;
-
-      // Apply muted style if subscription is inactive
-      if (item.subscription && item.subscription.is_active === false) {
+      const cityName = item.city.name;
+      const countryCode = item.city.country || '';
+      cityEl.textContent = countryCode ? `${cityName} (${countryCode})` : cityName;
+      if (!item.subscription.is_active) {
         cityEl.classList.add('text-dark-text-secondary', 'opacity-60');
-      } else {
-        cityEl.classList.remove('text-dark-text-secondary', 'opacity-60');
-        cityEl.classList.add('text-dark-text-primary');
       }
     }
 
-    // Display local time for the city
+    // Local time (use timezone_offset from API response)
     const timeEl = clone.getElementById('list-item-time');
     if (timeEl) {
-      const cityTime = getCityLocalTime(item.city);
-      timeEl.textContent = cityTime;
+      const timezoneOffset = item.timezone_offset || 0;
+      // Use current UTC time and apply city's timezone offset
+      const now = Math.floor(Date.now() / 1000); // Current time in seconds
+      timeEl.textContent = formatTime(now, timezoneOffset);
     }
 
-    // Store city data in data attribute for time updates
-    if (listItem && item.city) {
-      try {
-        listItem.setAttribute('data-city', JSON.stringify({
-          country: item.city.country,
-          name: item.city.name,
-          latitude: item.city.latitude,
-          longitude: item.city.longitude,
-        }));
-      } catch (error) {
-        console.error('Failed to store city data:', error);
-      }
-    }
-
+    // Weather icon
     const iconEl = clone.getElementById('list-item-icon');
-    if (iconEl && item.weather && item.weather.description) {
+    if (iconEl && item.weather?.description) {
       const icon = getWeatherIcon(item.weather.description, 'small');
       iconEl.innerHTML = '';
       iconEl.appendChild(icon);
     }
 
+    // Temperature
     const tempEl = clone.getElementById('list-item-temp');
-    if (tempEl && item.weather && item.weather.temperature !== undefined) {
-      tempEl.textContent = formatTemperature(item.weather.temperature);
-    } else if (tempEl) {
-      tempEl.textContent = '--';
+    if (tempEl) {
+      tempEl.textContent = item.weather?.temp !== undefined
+        ? formatTemperature(item.weather.temp)
+        : '--';
     }
 
-    // Setup settings button
+    // Settings button
     const settingsBtn = clone.querySelector('.settings-btn');
-    if (settingsBtn && item.subscription && item.subscription.id) {
+    if (settingsBtn && item.subscription?.id) {
       settingsBtn.setAttribute('data-subscription-id', item.subscription.id);
       settingsBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -169,20 +182,24 @@ export function renderSubscribedCitiesList(citiesData) {
       });
     }
 
-    // Store subscription ID in list item
-    if (listItem && item.subscription && item.subscription.id) {
+    if (listItem && item.subscription?.id) {
       listItem.setAttribute('data-subscription-id', item.subscription.id);
     }
 
     listContainer.appendChild(clone);
   });
+
+  // Initialize drag-to-scroll after rendering cities list
+  setTimeout(() => {
+    initCitiesListDragScroll();
+  }, 50);
 }
 
 /**
  * Select city from list
+ * @param {number} cityId - City ID to select
  */
 export async function selectCityFromList(cityId) {
-  // Prevent multiple simultaneous selections
   if (isSelectingCity || currentSelectedCityId === cityId) {
     return;
   }
@@ -192,30 +209,22 @@ export async function selectCityFromList(cityId) {
 
   try {
     // Update active state in list
-    const listItems = document.querySelectorAll('.city-list-item');
-    listItems.forEach((item) => {
-      if (parseInt(item.getAttribute('data-city-id')) === cityId) {
-        item.classList.add('active');
-      } else {
-        item.classList.remove('active');
-      }
+    document.querySelectorAll('.city-list-item').forEach((item) => {
+      const itemId = parseInt(item.getAttribute('data-city-id'));
+      item.classList.toggle('active', itemId === cityId);
     });
 
-    // Get city data from subscriptions list to pass full city object
+    // Dispatch event
     const subscriptions = await getUserSubscriptions();
-    const subscription = subscriptions.find(sub => sub.city && sub.city.id === cityId);
-    const city = subscription ? subscription.city : null;
+    const subscription = subscriptions.find(sub => sub.city?.id === cityId);
 
-    // Dispatch event for city selection with city data
-    const event = new CustomEvent('citySelected', {
+    document.dispatchEvent(new CustomEvent('citySelected', {
       detail: {
         cityId,
-        city: city || { id: cityId }
+        city: subscription?.city || { id: cityId },
       }
-    });
-    document.dispatchEvent(event);
+    }));
   } finally {
-    // Reset flag after a short delay to allow event processing
     setTimeout(() => {
       isSelectingCity = false;
     }, 200);
@@ -224,49 +233,54 @@ export async function selectCityFromList(cityId) {
 
 /**
  * Create subscription
- * @param {number|object} cityIdOrData - City ID (if city exists in DB) or city data object {id, name, country, lat, lon}
+ * @param {number|Object} cityIdOrData - City ID or city data object
  * @param {number} period - Update period in hours
  * @param {string} forecastPeriod - Forecast period
  * @param {string} notificationType - Notification type
- * @param {boolean} isActive - Whether subscription is active (default: false)
+ * @param {boolean} isActive - Whether subscription is active
+ * @returns {Promise<Object>} Created subscription
  */
-export async function createSubscription(cityIdOrData, period = 6, forecastPeriod = 'current', notificationType = 'email', isActive = false) {
-  try {
-    // Prepare request body
-    // New subscriptions are created as inactive by default
-    const requestBody = {
-      period,
-      forecast_period: forecastPeriod,
-      notification_type: notificationType,
-      is_active: isActive,
-    };
+export async function createSubscription(
+  cityIdOrData,
+  period = 6,
+  forecastPeriod = 'current',
+  notificationType = 'email',
+  isActive = false
+) {
+  // Validate forecast period
+  if (!VALID_PERIODS.includes(forecastPeriod)) {
+    forecastPeriod = 'current';
+  }
 
-    // If cityIdOrData is a number, use city_id
-    // If it's an object without id, use city_data
-    if (typeof cityIdOrData === 'number') {
-      requestBody.city_id = cityIdOrData;
-    } else if (typeof cityIdOrData === 'object') {
-      if (cityIdOrData.id) {
-        // City has ID (from DB)
-        requestBody.city_id = cityIdOrData.id;
-      } else {
-        // City from API (no ID) - send city_data to create in DB
-        requestBody.city_data = {
-          name: cityIdOrData.name,
-          country: cityIdOrData.country,
-          lat: cityIdOrData.lat || cityIdOrData.latitude,
-          lon: cityIdOrData.lon || cityIdOrData.longitude,
-        };
-      }
+  const requestBody = {
+    period,
+    forecast_period: forecastPeriod,
+    notification_type: notificationType,
+    is_active: isActive,
+  };
+
+  if (typeof cityIdOrData === 'number') {
+    requestBody.city_id = cityIdOrData;
+  } else if (typeof cityIdOrData === 'object') {
+    if (cityIdOrData.id) {
+      requestBody.city_id = cityIdOrData.id;
     } else {
-      throw new Error('Invalid city data: must be city ID (number) or city object');
+      requestBody.city_data = {
+        name: cityIdOrData.name,
+        country: cityIdOrData.country,
+        lat: cityIdOrData.lat || cityIdOrData.latitude,
+        lon: cityIdOrData.lon || cityIdOrData.longitude,
+      };
     }
+  } else {
+    throw new Error('Invalid city data');
+  }
 
-    const data = await apiRequest('subscriptions/', {
-      method: 'POST',
-      body: JSON.stringify(requestBody),
-    });
-    return data;
+  try {
+    const result = await apiPost(API_ENDPOINTS.subscriptions, requestBody);
+    // Clear subscriptions cache
+    cache.delete(Cache.subscriptionsKey());
+    return result;
   } catch (error) {
     handleApiError(error);
     throw error;
@@ -275,13 +289,14 @@ export async function createSubscription(cityIdOrData, period = 6, forecastPerio
 
 /**
  * Update subscription
+ * @param {number} subscriptionId - Subscription ID
+ * @param {Object} data - Update data
+ * @returns {Promise<Object>} Updated subscription
  */
 export async function updateSubscription(subscriptionId, data) {
   try {
-    const result = await apiRequest(`subscriptions/${subscriptionId}/`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
+    const result = await apiPatch(API_ENDPOINTS.subscriptionDetail(subscriptionId), data);
+    cache.delete(Cache.subscriptionsKey());
     return result;
   } catch (error) {
     handleApiError(error);
@@ -291,12 +306,13 @@ export async function updateSubscription(subscriptionId, data) {
 
 /**
  * Delete subscription
+ * @param {number} subscriptionId - Subscription ID
+ * @returns {Promise<boolean>} Success status
  */
 export async function deleteSubscription(subscriptionId) {
   try {
-    await apiRequest(`subscriptions/${subscriptionId}/`, {
-      method: 'DELETE',
-    });
+    await apiDelete(API_ENDPOINTS.subscriptionDetail(subscriptionId));
+    cache.delete(Cache.subscriptionsKey());
     return true;
   } catch (error) {
     handleApiError(error);
@@ -305,163 +321,13 @@ export async function deleteSubscription(subscriptionId) {
 }
 
 /**
- * Handle unsubscribe with confirmation
- */
-async function handleUnsubscribe(subscriptionId, city) {
-  // Show confirmation dialog
-  const cityName = city ? `${city.name}, ${city.country}` : 'this city';
-  const confirmed = confirm(
-    `Are you sure you want to unsubscribe from ${cityName}?\n\nThis action cannot be undone.`
-  );
-
-  if (!confirmed) {
-    return; // User cancelled
-  }
-
-  try {
-    // Disable unsubscribe button during deletion
-    const unsubscribeBtn = document.getElementById('modal-unsubscribe-btn');
-    if (unsubscribeBtn) {
-      unsubscribeBtn.disabled = true;
-      unsubscribeBtn.textContent = 'Unsubscribing...';
-    }
-
-    // Delete subscription
-    await deleteSubscription(subscriptionId);
-
-    // Hide modal
-    hideSubscriptionModal();
-
-    // Reload subscriptions list
-    const citiesData = await loadSubscribedCitiesWithWeather();
-    renderSubscribedCitiesList(citiesData);
-
-    // Show success message
-    showNotification(`Unsubscribed from ${cityName}`, 'success');
-  } catch (error) {
-    console.error('Failed to unsubscribe:', error);
-    const errorMsg = error.message || 'Failed to unsubscribe';
-    showNotification(errorMsg, 'error');
-  } finally {
-    // Re-enable button (in case of error)
-    const unsubscribeBtn = document.getElementById('modal-unsubscribe-btn');
-    if (unsubscribeBtn) {
-      unsubscribeBtn.disabled = false;
-      unsubscribeBtn.textContent = 'Unsubscribe';
-    }
-  }
-}
-
-/**
- * Get timezone for a city based on country
- * @param {object} city - City object with country
- * @returns {string} IANA timezone string
- */
-function getCityTimezone(city) {
-  if (!city || !city.country) {
-    // Default to UTC if country not available
-    return 'UTC';
-  }
-
-  const country = city.country.toLowerCase();
-  const cityName = city.name ? city.name.toLowerCase() : '';
-
-  // Map countries to their timezones
-  // For Ukraine, all cities use Europe/Kyiv
-  if (country === 'ua' || country === 'ukraine' || country === 'україна') {
-    return 'Europe/Kyiv';
-  }
-
-  // For USA, determine timezone based on city name or coordinates
-  if (country === 'us' || country === 'usa' || country === 'united states') {
-    // Major US cities timezone mapping
-    if (cityName.includes('san francisco') || cityName.includes('los angeles') ||
-        cityName.includes('seattle') || cityName.includes('portland') ||
-        cityName.includes('san diego') || cityName.includes('las vegas')) {
-      return 'America/Los_Angeles'; // Pacific Time
-    }
-    if (cityName.includes('new york') || cityName.includes('boston') ||
-        cityName.includes('washington') || cityName.includes('miami') ||
-        cityName.includes('atlanta') || cityName.includes('philadelphia')) {
-      return 'America/New_York'; // Eastern Time
-    }
-    if (cityName.includes('chicago') || cityName.includes('dallas') ||
-        cityName.includes('houston') || cityName.includes('minneapolis') ||
-        cityName.includes('detroit')) {
-      return 'America/Chicago'; // Central Time
-    }
-    if (cityName.includes('denver') || cityName.includes('phoenix') ||
-        cityName.includes('salt lake') || cityName.includes('albuquerque')) {
-      return 'America/Denver'; // Mountain Time
-    }
-
-    // Fallback: use coordinates to estimate timezone
-    // Rough approximation: -120 to -105 = Pacific, -105 to -90 = Mountain,
-    // -90 to -75 = Central, -75 to -60 = Eastern
-    if (city.longitude !== undefined) {
-      const lon = parseFloat(city.longitude);
-      if (lon >= -125 && lon < -102) {
-        return 'America/Los_Angeles'; // Pacific
-      } else if (lon >= -102 && lon < -90) {
-        return 'America/Denver'; // Mountain
-      } else if (lon >= -90 && lon < -75) {
-        return 'America/Chicago'; // Central
-      } else if (lon >= -75 && lon < -60) {
-        return 'America/New_York'; // Eastern
-      }
-    }
-
-    // Default to Eastern Time for USA if unknown
-    return 'America/New_York';
-  }
-
-  // For other countries, try to determine based on coordinates or country
-  // This is a simplified mapping - for production, consider using a timezone library
-  if (country === 'gb' || country === 'uk' || country === 'united kingdom') {
-    return 'Europe/London';
-  }
-  if (country === 'de' || country === 'germany') {
-    return 'Europe/Berlin';
-  }
-  if (country === 'fr' || country === 'france') {
-    return 'Europe/Paris';
-  }
-  if (country === 'it' || country === 'italy') {
-    return 'Europe/Rome';
-  }
-  if (country === 'es' || country === 'spain') {
-    return 'Europe/Madrid';
-  }
-  if (country === 'ru' || country === 'russia') {
-    // Russia spans multiple timezones, default to Moscow
-    return 'Europe/Moscow';
-  }
-  if (country === 'jp' || country === 'japan') {
-    return 'Asia/Tokyo';
-  }
-  if (country === 'cn' || country === 'china') {
-    return 'Asia/Shanghai';
-  }
-  if (country === 'au' || country === 'australia') {
-    // Australia spans multiple timezones, default to Sydney
-    return 'Australia/Sydney';
-  }
-
-  // Default to UTC for unknown countries
-  return 'UTC';
-}
-
-/**
- * Get local time for a city based on its timezone
- * @param {object} city - City object with country
- * @returns {string} Formatted local time string
+ * Get local time for a city
+ * @param {Object} city - City object
+ * @returns {string} Formatted local time
  */
 function getCityLocalTime(city) {
   try {
-    const timezone = getCityTimezone(city);
-
-    // Use Intl.DateTimeFormat to get time in the city's timezone
-    const now = new Date();
+    const timezone = getTimezoneForCity(city);
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: timezone,
       hour: 'numeric',
@@ -469,73 +335,90 @@ function getCityLocalTime(city) {
       hour12: true,
     });
 
-    // Format the time
-    const parts = formatter.formatToParts(now);
+    const parts = formatter.formatToParts(new Date());
     const hour = parts.find(p => p.type === 'hour')?.value || '12';
     const minute = parts.find(p => p.type === 'minute')?.value || '00';
     const dayPeriod = parts.find(p => p.type === 'dayPeriod')?.value || 'AM';
 
     return `${hour}:${minute} ${dayPeriod}`;
-  } catch (error) {
-    console.error('Error calculating city local time:', error);
-    // Fallback to current time
-    return formatTime(new Date());
+  } catch {
+    return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   }
 }
 
 /**
- * Update time for all cities in the list
+ * Get timezone for city (simplified)
+ * @param {Object} city - City object
+ * @returns {string} IANA timezone
+ */
+function getTimezoneForCity(city) {
+  if (!city?.country) return 'UTC';
+
+  const country = city.country.toLowerCase();
+
+  // Common country mappings
+  const timezones = {
+    ua: 'Europe/Kyiv',
+    ukraine: 'Europe/Kyiv',
+    gb: 'Europe/London',
+    uk: 'Europe/London',
+    de: 'Europe/Berlin',
+    fr: 'Europe/Paris',
+    it: 'Europe/Rome',
+    es: 'Europe/Madrid',
+    pl: 'Europe/Warsaw',
+    ru: 'Europe/Moscow',
+    jp: 'Asia/Tokyo',
+    cn: 'Asia/Shanghai',
+    au: 'Australia/Sydney',
+    ca: 'America/Toronto',
+    br: 'America/Sao_Paulo',
+  };
+
+  // USA - estimate by longitude
+  if (['us', 'usa'].includes(country)) {
+    const lon = parseFloat(city.longitude);
+    if (lon >= -125 && lon < -102) return 'America/Los_Angeles';
+    if (lon >= -102 && lon < -90) return 'America/Denver';
+    if (lon >= -90 && lon < -75) return 'America/Chicago';
+    return 'America/New_York';
+  }
+
+  return timezones[country] || 'UTC';
+}
+
+/**
+ * Update time for all cities in list
  */
 function updateCitiesTime() {
-  const listItems = document.querySelectorAll('.city-list-item');
-
-  listItems.forEach((item) => {
-    const cityId = item.getAttribute('data-city-id');
-    if (!cityId) return;
-
-    // Get city data from the subscriptions (we need to store it or fetch it)
-    // For now, we'll get it from the data attribute or reconstruct from the list
-    const cityName = item.querySelector('#list-item-city')?.textContent;
-
-    // Try to get city data from stored subscriptions
-    // We need to store city data when rendering
+  document.querySelectorAll('.city-list-item').forEach((item) => {
     const cityData = item.getAttribute('data-city');
-    if (cityData) {
-      try {
-        const city = JSON.parse(cityData);
-        const timeEl = item.querySelector('#list-item-time');
-        if (timeEl) {
-          timeEl.textContent = getCityLocalTime(city);
-        }
-      } catch (error) {
-        console.error('Failed to parse city data:', error);
+    if (!cityData) return;
+
+    try {
+      const city = JSON.parse(cityData);
+      const timeEl = item.querySelector('#list-item-time');
+      if (timeEl) {
+        // Use timezone_offset from stored city data
+        const timezoneOffset = city.timezone_offset || 0;
+        const now = Math.floor(Date.now() / 1000); // Current time in seconds
+        timeEl.textContent = formatTime(now, timezoneOffset);
       }
-    }
+    } catch {}
   });
 }
 
 /**
- * Initialize time update interval
+ * Initialize time updates
  */
-let timeUpdateInterval = null;
-
 export function initTimeUpdates() {
-  // Clear existing interval if any
-  if (timeUpdateInterval) {
-    clearInterval(timeUpdateInterval);
-  }
-
-  // Update time immediately
+  stopTimeUpdates();
   updateCitiesTime();
-
-  // Update time every minute (60000 ms)
-  timeUpdateInterval = setInterval(() => {
-    updateCitiesTime();
-  }, 60000);
+  timeUpdateInterval = setInterval(updateCitiesTime, 60000);
 }
 
 /**
- * Stop time update interval
+ * Stop time updates
  */
 export function stopTimeUpdates() {
   if (timeUpdateInterval) {
@@ -545,7 +428,7 @@ export function stopTimeUpdates() {
 }
 
 /**
- * Add new location handler
+ * Add new location (focus search)
  */
 export function addNewLocation() {
   const searchInput = document.getElementById('city-search');
@@ -556,20 +439,20 @@ export function addNewLocation() {
 
 /**
  * Get current selected city ID
+ * @returns {number|null} Selected city ID
  */
 export function getCurrentSelectedCityId() {
   return currentSelectedCityId;
 }
 
 /**
- * Show subscription settings modal for editing
+ * Show subscription settings modal
+ * @param {Object} subscription - Subscription object (null for new)
+ * @param {Object} city - City object
  */
 export function showSubscriptionSettingsModal(subscription, city) {
   const modal = document.getElementById('subscription-modal');
-  if (!modal) {
-    console.error('Subscription modal not found');
-    return;
-  }
+  if (!modal) return;
 
   // Set city name
   const cityNameEl = document.getElementById('modal-city-name');
@@ -577,32 +460,17 @@ export function showSubscriptionSettingsModal(subscription, city) {
     cityNameEl.textContent = `${city.name}, ${city.country}`;
   }
 
-  // Set current subscription values
-  const periodEl = document.getElementById('modal-period');
-  const forecastPeriodEl = document.getElementById('modal-forecast-period');
-  const notificationTypeEl = document.getElementById('modal-notification-type');
-  const isActiveEl = document.getElementById('modal-is-active');
-  const activeSection = document.getElementById('modal-active-section');
+  // Set form values
+  setElementValue('modal-period', subscription?.period || 6);
+  setElementValue('modal-forecast-period', subscription?.forecast_period || 'current');
+  setElementValue('modal-notification-type', subscription?.notification_type || 'email');
 
-  if (periodEl) {
-    periodEl.value = subscription?.period || 6;
-  }
-  if (forecastPeriodEl) {
-    forecastPeriodEl.value = subscription?.forecast_period || 'current';
-  }
-  if (notificationTypeEl) {
-    notificationTypeEl.value = subscription?.notification_type || 'email';
-  }
+  const isActiveEl = document.getElementById('modal-is-active');
   if (isActiveEl) {
-    if (subscription) {
-      // Editing existing subscription - use its current status
-      isActiveEl.checked = subscription.is_active !== undefined ? subscription.is_active : false;
-    } else {
-      // Creating new subscription - default to inactive
-      isActiveEl.checked = false;
-    }
+    isActiveEl.checked = subscription?.is_active ?? false;
   }
-  // Always show active section (for both creating and editing)
+
+  const activeSection = document.getElementById('modal-active-section');
   if (activeSection) {
     activeSection.style.display = 'block';
   }
@@ -613,70 +481,57 @@ export function showSubscriptionSettingsModal(subscription, city) {
     submitBtn.textContent = subscription ? 'Update' : 'Subscribe';
   }
 
-  // Show/hide unsubscribe button (only for existing subscriptions)
+  // Show/hide unsubscribe button
   const unsubscribeBtn = document.getElementById('modal-unsubscribe-btn');
   if (unsubscribeBtn) {
-    if (subscription && subscription.id) {
-      unsubscribeBtn.classList.remove('hidden');
-    } else {
-      unsubscribeBtn.classList.add('hidden');
-    }
+    unsubscribeBtn.classList.toggle('hidden', !subscription?.id);
   }
 
-  // Show modal
   modal.classList.remove('hidden');
-
-  // Setup handlers
-  setupSubscriptionModalHandlers(subscription, city);
+  setupModalHandlers(subscription, city);
 }
 
 /**
- * Setup subscription modal handlers
+ * Set element value helper
  */
-function setupSubscriptionModalHandlers(subscription, city) {
+function setElementValue(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = value;
+}
+
+/**
+ * Setup modal event handlers
+ */
+function setupModalHandlers(subscription, city) {
   const submitBtn = document.getElementById('modal-subscribe-btn');
   const cancelBtn = document.getElementById('modal-cancel-btn');
   const closeBtn = document.getElementById('modal-close-btn');
   const unsubscribeBtn = document.getElementById('modal-unsubscribe-btn');
 
-  // Remove existing handlers by cloning buttons
-  const newSubmitBtn = submitBtn.cloneNode(true);
-  submitBtn.parentNode.replaceChild(newSubmitBtn, submitBtn);
-
-  const newCancelBtn = cancelBtn.cloneNode(true);
-  cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
-
-  const newCloseBtn = closeBtn.cloneNode(true);
-  closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
-
-  // Clone unsubscribe button if it exists
-  let newUnsubscribeBtn = null;
-  if (unsubscribeBtn) {
-    newUnsubscribeBtn = unsubscribeBtn.cloneNode(true);
-    unsubscribeBtn.parentNode.replaceChild(newUnsubscribeBtn, unsubscribeBtn);
-  }
-
-  // Add new handlers
-  if (newSubmitBtn) {
-    if (subscription && subscription.id) {
-      // Editing existing subscription
-      newSubmitBtn.onclick = () => handleSubscriptionUpdate(subscription.id, city);
-    } else {
-      // Creating new subscription
-      newSubmitBtn.onclick = () => handleSubscriptionCreate(city);
+  // Remove old handlers by replacing elements
+  [submitBtn, cancelBtn, closeBtn, unsubscribeBtn].forEach((btn) => {
+    if (btn) {
+      const newBtn = btn.cloneNode(true);
+      btn.parentNode.replaceChild(newBtn, btn);
     }
+  });
+
+  // Re-get elements after replacement
+  const newSubmitBtn = document.getElementById('modal-subscribe-btn');
+  const newCancelBtn = document.getElementById('modal-cancel-btn');
+  const newCloseBtn = document.getElementById('modal-close-btn');
+  const newUnsubscribeBtn = document.getElementById('modal-unsubscribe-btn');
+
+  if (newSubmitBtn) {
+    newSubmitBtn.onclick = () => subscription?.id
+      ? handleUpdate(subscription.id, city)
+      : handleCreate(city);
   }
 
-  if (newCancelBtn) {
-    newCancelBtn.onclick = hideSubscriptionModal;
-  }
+  if (newCancelBtn) newCancelBtn.onclick = hideModal;
+  if (newCloseBtn) newCloseBtn.onclick = hideModal;
 
-  if (newCloseBtn) {
-    newCloseBtn.onclick = hideSubscriptionModal;
-  }
-
-  // Add unsubscribe handler (only for existing subscriptions)
-  if (newUnsubscribeBtn && subscription && subscription.id) {
+  if (newUnsubscribeBtn && subscription?.id) {
     newUnsubscribeBtn.onclick = () => handleUnsubscribe(subscription.id, city);
   }
 }
@@ -684,41 +539,25 @@ function setupSubscriptionModalHandlers(subscription, city) {
 /**
  * Handle subscription update
  */
-async function handleSubscriptionUpdate(subscriptionId, city) {
-  const period = document.getElementById('modal-period')?.value || 6;
-  const forecastPeriod = document.getElementById('modal-forecast-period')?.value || 'current';
-  const notificationType = document.getElementById('modal-notification-type')?.value || 'email';
-  const isActive = document.getElementById('modal-is-active')?.checked ?? true;
+async function handleUpdate(subscriptionId, city) {
+  const data = getModalFormData();
+  const submitBtn = document.getElementById('modal-subscribe-btn');
 
   try {
-    const submitBtn = document.getElementById('modal-subscribe-btn');
     if (submitBtn) {
       submitBtn.disabled = true;
       submitBtn.textContent = 'Updating...';
     }
 
-    await updateSubscription(subscriptionId, {
-      period: parseInt(period),
-      forecast_period: forecastPeriod,
-      notification_type: notificationType,
-      is_active: isActive,
-    });
+    await updateSubscription(subscriptionId, data);
+    hideModal();
 
-    // Hide modal
-    hideSubscriptionModal();
-
-    // Reload subscriptions list
     const citiesData = await loadSubscribedCitiesWithWeather();
     renderSubscribedCitiesList(citiesData);
-
-    // Show success message
     showNotification(`Subscription updated for ${city.name}`, 'success');
   } catch (error) {
-    console.error('Failed to update subscription:', error);
-    const errorMsg = error.response?.period?.[0] || error.message || 'Failed to update subscription';
-    showNotification(errorMsg, 'error');
+    showNotification(error.message || 'Failed to update subscription', 'error');
   } finally {
-    const submitBtn = document.getElementById('modal-subscribe-btn');
     if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Update';
@@ -727,44 +566,31 @@ async function handleSubscriptionUpdate(subscriptionId, city) {
 }
 
 /**
- * Handle subscription create (from modal)
+ * Handle subscription create
  */
-async function handleSubscriptionCreate(city) {
-  const period = document.getElementById('modal-period')?.value || 6;
-  const forecastPeriod = document.getElementById('modal-forecast-period')?.value || 'current';
-  const notificationType = document.getElementById('modal-notification-type')?.value || 'email';
-  const isActive = document.getElementById('modal-is-active')?.checked ?? false;
+async function handleCreate(city) {
+  const data = getModalFormData();
+  const submitBtn = document.getElementById('modal-subscribe-btn');
 
   try {
-    const submitBtn = document.getElementById('modal-subscribe-btn');
     if (submitBtn) {
       submitBtn.disabled = true;
       submitBtn.textContent = 'Subscribing...';
     }
 
-    // Pass city object (with or without id) - function will handle it
-    // Note: New subscriptions are created as inactive by default
-    await createSubscription(city, parseInt(period), forecastPeriod, notificationType, isActive);
+    await createSubscription(city, data.period, data.forecast_period, data.notification_type, data.is_active);
+    hideModal();
 
-    // Hide modal
-    hideSubscriptionModal();
-
-    // Reload subscriptions list
     const citiesData = await loadSubscribedCitiesWithWeather();
     renderSubscribedCitiesList(citiesData);
-
-    // Show success message
     showNotification(`Successfully subscribed to ${city.name}`, 'success');
 
-    // Select the newly subscribed city
-    const event = new CustomEvent('citySelected', { detail: { city, cityId: city.id } });
-    document.dispatchEvent(event);
+    document.dispatchEvent(new CustomEvent('citySelected', {
+      detail: { city, cityId: city.id }
+    }));
   } catch (error) {
-    console.error('Failed to create subscription:', error);
-    const errorMsg = error.response?.city_id?.[0] || error.message || 'Failed to create subscription';
-    showNotification(errorMsg, 'error');
+    showNotification(error.message || 'Failed to create subscription', 'error');
   } finally {
-    const submitBtn = document.getElementById('modal-subscribe-btn');
     if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Subscribe';
@@ -773,34 +599,77 @@ async function handleSubscriptionCreate(city) {
 }
 
 /**
- * Hide subscription modal
+ * Handle unsubscribe
  */
-function hideSubscriptionModal() {
-  const modal = document.getElementById('subscription-modal');
-  if (modal) {
-    modal.classList.add('hidden');
+async function handleUnsubscribe(subscriptionId, city) {
+  const cityName = city ? `${city.name}, ${city.country}` : 'this city';
+
+  if (!confirm(`Are you sure you want to unsubscribe from ${cityName}?`)) {
+    return;
   }
-  // Reset form - keep active section visible but uncheck checkbox
-  const isActiveEl = document.getElementById('modal-is-active');
-  if (isActiveEl) {
-    isActiveEl.checked = false;
+
+  const unsubscribeBtn = document.getElementById('modal-unsubscribe-btn');
+
+  try {
+    if (unsubscribeBtn) {
+      unsubscribeBtn.disabled = true;
+      unsubscribeBtn.textContent = 'Unsubscribing...';
+    }
+
+    await deleteSubscription(subscriptionId);
+    hideModal();
+
+    const citiesData = await loadSubscribedCitiesWithWeather();
+    renderSubscribedCitiesList(citiesData);
+    showNotification(`Unsubscribed from ${cityName}`, 'success');
+  } catch (error) {
+    showNotification(error.message || 'Failed to unsubscribe', 'error');
+  } finally {
+    if (unsubscribeBtn) {
+      unsubscribeBtn.disabled = false;
+      unsubscribeBtn.textContent = 'Unsubscribe';
+    }
   }
 }
 
 /**
- * Show notification message
+ * Get form data from modal
+ */
+function getModalFormData() {
+  return {
+    period: parseInt(document.getElementById('modal-period')?.value || 6),
+    forecast_period: document.getElementById('modal-forecast-period')?.value || 'current',
+    notification_type: document.getElementById('modal-notification-type')?.value || 'email',
+    is_active: document.getElementById('modal-is-active')?.checked ?? false,
+  };
+}
+
+/**
+ * Hide modal
+ */
+function hideModal() {
+  const modal = document.getElementById('subscription-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+/**
+ * Show notification
+ * @param {string} message - Message
+ * @param {string} type - Type: 'success', 'error', 'info'
  */
 function showNotification(message, type = 'info') {
+  const colors = {
+    success: 'bg-green-600',
+    error: 'bg-red-600',
+    info: 'bg-blue-600',
+  };
+
   const notification = document.createElement('div');
-  notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
-    type === 'success' ? 'bg-green-600' : type === 'error' ? 'bg-red-600' : 'bg-blue-600'
-  } text-white`;
+  notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${colors[type]} text-white`;
   notification.textContent = message;
 
   document.body.appendChild(notification);
-
-  setTimeout(() => {
-    notification.remove();
-  }, 3000);
+  setTimeout(() => notification.remove(), 3000);
 }
-

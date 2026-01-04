@@ -1,16 +1,26 @@
 /**
  * City search functionality
+ * Refactored version - clean implementation
  */
 
-import { apiRequest, handleApiError, getAuthToken } from './api.js';
-import { createSubscription, showSubscriptionSettingsModal } from './subscriptions.js';
-import { loadSubscribedCitiesWithWeather, renderSubscribedCitiesList } from './subscriptions.js';
+import { apiGet, handleApiError, getAuthToken } from './api.js';
+import { API_ENDPOINTS } from './config.js';
+import {
+  createSubscription,
+  showSubscriptionSettingsModal,
+  loadSubscribedCitiesWithWeather,
+  renderSubscribedCitiesList,
+} from './subscriptions.js';
 
-let searchTimeout = null;
 const DEBOUNCE_DELAY = 300;
+let searchTimeout = null;
+let searchInitialized = false;
+let clickHandler = null;
 
 /**
- * Helper function to escape HTML
+ * Escape HTML to prevent XSS
+ * @param {string} text - Text to escape
+ * @returns {string} Escaped text
  */
 function escapeHtml(text) {
   if (!text) return '';
@@ -21,6 +31,8 @@ function escapeHtml(text) {
 
 /**
  * Search cities with debounce
+ * @param {string} query - Search query
+ * @param {Function} callback - Optional callback for results
  */
 export function searchCities(query, callback) {
   if (searchTimeout) {
@@ -34,9 +46,8 @@ export function searchCities(query, callback) {
 
   searchTimeout = setTimeout(async () => {
     try {
-      const response = await apiRequest(`cities/search/?q=${encodeURIComponent(query)}`);
-      // Handle paginated response (results) or direct array
-      const results = response.results || response;
+      const response = await apiGet(`${API_ENDPOINTS.citySearch}?q=${encodeURIComponent(query)}`);
+      const results = response.results || response || [];
 
       if (callback) {
         callback(results);
@@ -52,18 +63,19 @@ export function searchCities(query, callback) {
 
 /**
  * Display search results in dropdown
+ * @param {Array} results - Search results
  */
 export function displaySearchResults(results) {
-  const resultsContainer = document.getElementById('search-results');
-  if (!resultsContainer) return;
+  const container = document.getElementById('search-results');
+  if (!container) return;
 
   if (!results || results.length === 0) {
-    resultsContainer.innerHTML = '<div class="p-4 text-dark-text-secondary text-center">No cities found</div>';
-    resultsContainer.classList.remove('hidden');
+    container.innerHTML = '<div class="p-4 text-dark-text-secondary text-center">No cities found</div>';
+    container.classList.remove('hidden');
     return;
   }
 
-  resultsContainer.innerHTML = '';
+  container.innerHTML = '';
 
   results.forEach((city) => {
     const item = document.createElement('div');
@@ -79,34 +91,29 @@ export function displaySearchResults(results) {
         </svg>
       </div>
     `;
-    // При кліку на результат автоматично створюємо підписку
     item.addEventListener('click', () => selectCity(city, true));
-    resultsContainer.appendChild(item);
+    container.appendChild(item);
   });
 
-  // Expose function globally for inline onclick handler
-  window.selectCityAndSubscribe = (cityId, cityName, cityCountry) => {
-    selectCity({ id: cityId, name: cityName, country: cityCountry }, true);
-  };
-
-  resultsContainer.classList.remove('hidden');
+  container.classList.remove('hidden');
 }
 
 /**
  * Hide search results dropdown
  */
 export function hideSearchResults() {
-  const resultsContainer = document.getElementById('search-results');
-  if (resultsContainer) {
-    resultsContainer.classList.add('hidden');
+  const container = document.getElementById('search-results');
+  if (container) {
+    container.classList.add('hidden');
   }
 }
 
 /**
- * Select city and update UI
- * Optionally create subscription if user is authenticated
+ * Select city from search results
+ * @param {Object} city - City object
+ * @param {boolean} shouldSubscribe - Whether to create subscription
  */
-export function selectCity(city, createSubscription = false) {
+export function selectCity(city, shouldSubscribe = false) {
   hideSearchResults();
 
   // Clear search input
@@ -115,93 +122,60 @@ export function selectCity(city, createSubscription = false) {
     searchInput.value = '';
   }
 
-  // If user wants to create subscription
-  if (createSubscription) {
-    // Check if user is authenticated
+  if (shouldSubscribe) {
     const token = getAuthToken();
     if (!token) {
       showNotification('Please log in to add cities', 'error');
       return;
     }
 
-    // Try to show modal, if not available, create subscription directly
     const modal = document.getElementById('subscription-modal');
     if (modal) {
-      showSubscriptionModal(city);
+      showSubscriptionSettingsModal(null, city);
     } else {
-      // Create subscription directly with defaults
-      createSubscriptionFromSearch(city);
+      createSubscriptionDirect(city);
     }
   } else {
-    // Dispatch custom event for city selection
-    const event = new CustomEvent('citySelected', { detail: { city, cityId: city.id } });
-    document.dispatchEvent(event);
+    document.dispatchEvent(new CustomEvent('citySelected', {
+      detail: { city, cityId: city.id }
+    }));
   }
 }
 
 /**
- * Show subscription creation modal
+ * Create subscription directly (without modal)
+ * @param {Object} city - City object
  */
-function showSubscriptionModal(city) {
-  // Check if user is authenticated
-  const token = getAuthToken();
-
-  if (!token) {
-    // Show login prompt
-    alert('Please log in to subscribe to cities');
-    return;
-  }
-
-  // Show modal for creating new subscription (no subscription object)
-  showSubscriptionSettingsModal(null, city);
-}
-
-
-
-/**
- * Create subscription directly from search (fallback)
- */
-async function createSubscriptionFromSearch(city) {
+async function createSubscriptionDirect(city) {
   try {
-    // Pass city object (with or without id) - function will handle it
-    await createSubscription(city, 6, 'current', 'email');
+    await createSubscription(city, 6, 'current', 'email', false);
 
-    // Reload subscriptions list to show in right panel
     const citiesData = await loadSubscribedCitiesWithWeather();
     renderSubscribedCitiesList(citiesData);
 
     showNotification(`Successfully added ${city.name}, ${city.country}`, 'success');
 
-    // Select the newly subscribed city
-    const event = new CustomEvent('citySelected', { detail: { city, cityId: city.id } });
-    document.dispatchEvent(event);
+    document.dispatchEvent(new CustomEvent('citySelected', {
+      detail: { city, cityId: city.id }
+    }));
   } catch (error) {
-    console.error('Failed to create subscription:', error);
-    const errorMsg = error.response?.city_id?.[0] || error.message || 'Failed to create subscription';
-    showNotification(errorMsg, 'error');
+    showNotification(error.message || 'Failed to add city', 'error');
   }
 }
-
 
 /**
  * Initialize search functionality
  */
-let searchInitialized = false;
-let clickHandler = null;
-
 export function initSearch() {
   const searchInput = document.getElementById('city-search');
-  if (!searchInput) {
-    console.warn('Search input not found');
-    return;
-  }
+  if (!searchInput) return;
 
-  // Remove existing event listeners if already initialized
+  // Remove existing click handler
   if (searchInitialized && clickHandler) {
     document.removeEventListener('click', clickHandler);
   }
 
-  // Add input event listener (only once per element)
+  // Add input listener (only once)
   if (!searchInput.hasAttribute('data-search-initialized')) {
     searchInput.addEventListener('input', (e) => {
       const query = e.target.value.trim();
@@ -214,7 +188,7 @@ export function initSearch() {
     searchInput.setAttribute('data-search-initialized', 'true');
   }
 
-  // Hide results when clicking outside
+  // Click outside to close
   clickHandler = (e) => {
     const resultsContainer = document.getElementById('search-results');
     if (resultsContainer && !resultsContainer.contains(e.target) && e.target !== searchInput) {
@@ -226,3 +200,20 @@ export function initSearch() {
   searchInitialized = true;
 }
 
+/**
+ * Show notification
+ */
+function showNotification(message, type = 'info') {
+  const colors = {
+    success: 'bg-green-600',
+    error: 'bg-red-600',
+    info: 'bg-blue-600',
+  };
+
+  const notification = document.createElement('div');
+  notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${colors[type]} text-white`;
+  notification.textContent = message;
+
+  document.body.appendChild(notification);
+  setTimeout(() => notification.remove(), 3000);
+}

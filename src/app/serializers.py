@@ -143,13 +143,15 @@ class UserSerializer(serializers.ModelSerializer):
 
 class WeatherDataSerializer(serializers.ModelSerializer):
     """
-    Serializer for WeatherData model.
+    Serializer for WeatherData model with JSONField.
 
     Used for serializing weather information for cities.
+    Data is stored as JSON array in 'data' field.
     """
 
     city_id = serializers.IntegerField(source="city.id", read_only=True)
     city_name = serializers.CharField(source="city.name", read_only=True)
+    items_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = WeatherData
@@ -158,16 +160,8 @@ class WeatherDataSerializer(serializers.ModelSerializer):
             "city_id",
             "city_name",
             "forecast_period",
-            "temperature",
-            "feels_like",
-            "humidity",
-            "pressure",
-            "wind_speed",
-            "wind_deg",
-            "visibility",
-            "clouds",
-            "description",
-            "icon",
+            "data",
+            "items_count",
             "fetched_at",
             "created_at",
             "updated_at",
@@ -176,6 +170,8 @@ class WeatherDataSerializer(serializers.ModelSerializer):
             "id",
             "city_id",
             "city_name",
+            "data",
+            "items_count",
             "fetched_at",
             "created_at",
             "updated_at",
@@ -229,7 +225,7 @@ class CityDetailSerializer(CitySerializer):
         """
         Get current weather data for the city.
 
-        Returns the most recent 'current' weather data.
+        Returns the most recent 'current' weather data with first item extracted.
         """
         current_weather = (
             obj.weather_data.filter(forecast_period="current")
@@ -237,9 +233,31 @@ class CityDetailSerializer(CitySerializer):
             .first()
         )
 
-        if current_weather:
-            return WeatherDataSerializer(current_weather).data
+        if current_weather and current_weather.data:
+            # Return first item from data array with metadata
+            first_item = current_weather.first_item
+            return {
+                "id": current_weather.id,
+                "forecast_period": current_weather.forecast_period,
+                "fetched_at": current_weather.fetched_at,
+                **first_item,
+            }
         return None
+
+
+class WeatherResponseSerializer(serializers.Serializer):
+    """
+    Serializer for weather API response.
+
+    Used for one-time weather requests (not from DB).
+    Returns weather data in unified format with metadata.
+    """
+
+    city = CitySerializer(read_only=True)
+    period = serializers.CharField(read_only=True)
+    data = serializers.ListField(read_only=True)
+    items_count = serializers.IntegerField(read_only=True)
+    fetched_at = serializers.DateTimeField(read_only=True)
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
@@ -290,7 +308,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 
     def validate_forecast_period(self, value):
         """Validate forecast_period is one of the allowed choices."""
-        valid_periods = ["current", "today", "tomorrow", "3days", "week"]
+        valid_periods = ["current", "hourly", "today", "tomorrow", "3days", "week"]
         if value not in valid_periods:
             raise serializers.ValidationError(
                 f"Forecast period must be one of: {', '.join(valid_periods)}"
@@ -416,7 +434,7 @@ class SubscriptionUpdateSerializer(serializers.ModelSerializer):
 
     def validate_forecast_period(self, value):
         """Validate forecast_period is one of the allowed choices."""
-        valid_periods = ["current", "today", "tomorrow", "3days", "week"]
+        valid_periods = ["current", "hourly", "today", "tomorrow", "3days", "week"]
         if value not in valid_periods:
             raise serializers.ValidationError(
                 f"Forecast period must be one of: {', '.join(valid_periods)}"

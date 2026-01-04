@@ -64,33 +64,70 @@ class SubscriptionFactory(factory.django.DjangoModelFactory):
 
 
 class WeatherDataFactory(factory.django.DjangoModelFactory):
-    """Factory for WeatherData model."""
+    """Factory for WeatherData model.
+
+    Note: WeatherData has unique_together constraint on (city, forecast_period).
+    When using this factory multiple times for the same city, use different
+    forecast_period values or use update_or_create pattern.
+    """
 
     class Meta:
         model = WeatherData
-        django_get_or_create = ("city", "forecast_period")
 
     city = factory.SubFactory(CityFactory)
     forecast_period = "current"
-    temperature = factory.LazyAttribute(
-        lambda obj: Decimal(str(round(random.uniform(-30, 40), 2)))
-    )
-    feels_like = factory.LazyAttribute(
-        lambda obj: Decimal(str(round(random.uniform(-30, 40), 2)))
-    )
-    humidity = factory.Faker("random_int", min=0, max=100)
-    pressure = factory.Faker("random_int", min=950, max=1050)
-    wind_speed = factory.LazyAttribute(
-        lambda obj: Decimal(str(round(random.uniform(0, 30), 2)))
-    )
-    wind_deg = factory.Faker("random_int", min=0, max=360)
-    visibility = factory.Faker("random_int", min=1000, max=10000)
-    clouds = factory.Faker("random_int", min=0, max=100)
-    description = factory.Faker("sentence", nb_words=3)
-    icon = factory.Faker("word")
+    data = factory.LazyAttribute(lambda obj: _generate_weather_data(obj.forecast_period))
     fetched_at = factory.LazyFunction(
         lambda: timezone.make_aware(fake.date_time_this_month())
     )
+
+
+def _generate_weather_data(forecast_period: str) -> list[dict]:
+    """Generate weather data array based on forecast period."""
+    import time
+
+    def _generate_item(timestamp: int) -> dict:
+        """Generate single weather data item."""
+        return {
+            "dt": timestamp,
+            "temp": round(random.uniform(-30, 40), 2),
+            "feels_like": round(random.uniform(-30, 40), 2),
+            "humidity": random.randint(0, 100),
+            "pressure": random.randint(950, 1050),
+            "wind_speed": round(random.uniform(0, 30), 2),
+            "wind_deg": random.randint(0, 360),
+            "clouds": random.randint(0, 100),
+            "visibility": random.randint(1000, 10000),
+            "uvi": round(random.uniform(0, 11), 2),
+            "pop": round(random.uniform(0, 1), 2),
+            "rain": round(random.uniform(0, 10), 2) if random.random() > 0.7 else None,
+            "snow": round(random.uniform(0, 10), 2) if random.random() > 0.9 else None,
+            "description": fake.sentence(nb_words=3),
+            "icon": random.choice(["01d", "02d", "03d", "04d", "09d", "10d", "11d", "13d", "50d"]),
+        }
+
+    base_timestamp = int(time.time())
+    hour = 3600
+    day = 86400
+
+    # Determine number of items based on period
+    period_items = {
+        "current": 1,
+        "hourly": 48,
+        "today": 1,
+        "tomorrow": 1,
+        "3days": 3,
+        "week": 7,
+        "8days": 8,
+    }
+
+    count = period_items.get(forecast_period, 1)
+
+    # Generate items with appropriate timestamps
+    if forecast_period == "hourly":
+        return [_generate_item(base_timestamp + i * hour) for i in range(count)]
+    else:
+        return [_generate_item(base_timestamp + i * day) for i in range(count)]
 
 
 class NotificationLogFactory(factory.django.DjangoModelFactory):

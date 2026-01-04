@@ -83,6 +83,7 @@ class Subscription(BaseModel):
 
     FORECAST_PERIOD_CHOICES = [
         ("current", "Current"),
+        ("hourly", "Hourly"),
         ("today", "Today"),
         ("tomorrow", "Tomorrow"),
         ("3days", "3 Days"),
@@ -161,18 +162,35 @@ class WeatherData(BaseModel):
     WeatherData model storing weather information for cities.
 
     Stores current and forecast weather data fetched from OpenWeatherMap API.
+    Data is always stored as JSON array (even for single items like 'current').
+
+    JSON data structure (each item in array):
+    {
+        "dt": 1704067200,        # Unix timestamp
+        "temp": 5.2,             # Temperature °C
+        "feels_like": 3.1,       # Feels like °C
+        "humidity": 80,          # Humidity %
+        "pressure": 1015,        # Pressure hPa
+        "wind_speed": 3.5,       # Wind speed m/s
+        "wind_deg": 180,         # Wind direction degrees
+        "clouds": 75,            # Cloudiness %
+        "visibility": 10000,     # Visibility m
+        "uvi": 2.5,              # UV index
+        "pop": 0.2,              # Probability of precipitation (0-1)
+        "rain": 0.5,             # Rain mm (if any)
+        "snow": null,            # Snow mm (if any)
+        "description": "cloudy", # Weather description
+        "icon": "04d"            # Weather icon code
+    }
     """
 
     FORECAST_PERIOD_CHOICES = [
         ("current", "Current"),
+        ("hourly", "Hourly"),
         ("today", "Today"),
         ("tomorrow", "Tomorrow"),
         ("3days", "3 Days"),
         ("week", "Week"),
-        ("hourly", "Hourly"),
-        ("10days", "10 Days"),
-        ("2weeks", "2 Weeks"),
-        ("month", "Month"),
     ]
 
     city = models.ForeignKey(
@@ -184,28 +202,10 @@ class WeatherData(BaseModel):
         max_length=20,
         choices=FORECAST_PERIOD_CHOICES,
     )
-    temperature = models.DecimalField(max_digits=5, decimal_places=2)
-    feels_like = models.DecimalField(max_digits=5, decimal_places=2)
-    humidity = models.IntegerField()
-    pressure = models.IntegerField()
-    wind_speed = models.DecimalField(max_digits=5, decimal_places=2)
-    wind_deg = models.IntegerField(
-        blank=True,
-        null=True,
-        help_text="Wind direction in degrees (0-360)",
+    data = models.JSONField(
+        default=list,
+        help_text="Weather data as JSON array",
     )
-    visibility = models.IntegerField(
-        blank=True,
-        null=True,
-        help_text="Visibility in meters",
-    )
-    clouds = models.IntegerField(
-        blank=True,
-        null=True,
-        help_text="Cloudiness percentage (0-100)",
-    )
-    description = models.CharField(max_length=200)
-    icon = models.CharField(max_length=10)
     fetched_at = models.DateTimeField()
 
     class Meta:
@@ -220,7 +220,20 @@ class WeatherData(BaseModel):
         ]
 
     def __str__(self):
-        return f"{self.city.name} - {self.forecast_period} - {self.temperature}°C"
+        count = len(self.data) if self.data else 0
+        return f"{self.city.name} - {self.forecast_period} ({count} items)"
+
+    @property
+    def items_count(self) -> int:
+        """Return number of weather data items."""
+        return len(self.data) if self.data else 0
+
+    @property
+    def first_item(self) -> dict | None:
+        """Return first weather data item or None."""
+        if self.data and len(self.data) > 0:
+            return self.data[0]
+        return None
 
 
 class NotificationLog(BaseModel):

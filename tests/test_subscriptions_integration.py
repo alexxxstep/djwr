@@ -39,12 +39,15 @@ class TestSubscriptionWeatherIntegration:
         assert create_response.status_code == status.HTTP_201_CREATED
         subscription_id = create_response.data["id"]
 
-        # Fetch weather for the subscribed city
+        # Fetch weather for the subscribed city (unified format)
         with patch(
             "app.services.weather_service.WeatherService.fetch_current_weather"
         ) as mock_fetch:
-            mock_fetch.return_value = {
-                "temperature": 15.5,
+            # Service now returns list
+            mock_fetch.return_value = [
+                {
+                    "dt": 1609459200,
+                    "temp": 15.5,
                 "feels_like": 14.8,
                 "humidity": 65,
                 "pressure": 1013,
@@ -52,12 +55,13 @@ class TestSubscriptionWeatherIntegration:
                 "description": "clear sky",
                 "icon": "01d",
             }
+            ]
 
             weather_response = api_client.get(f"/api/weather/{city.id}/?period=current")
 
             assert weather_response.status_code == status.HTTP_200_OK
             assert weather_response.data["city"]["id"] == city.id
-            assert weather_response.data["temperature"] == 15.5
+            assert weather_response.data["data"][0]["temp"] == 15.5
 
         # Verify subscription exists and is linked to city
         subscription = Subscription.objects.get(id=subscription_id)
@@ -65,15 +69,17 @@ class TestSubscriptionWeatherIntegration:
         assert subscription.user.id == user.id
 
     def test_subscription_with_weather_data_in_db(self, api_client, db):
-        """Test subscription with existing weather data in database."""
+        """Test subscription with existing weather data in database (JSONField)."""
         user = UserFactory()
         api_client.force_authenticate(user=user)
 
         city = CityFactory(name="London", country="GB")
 
-        # Create weather data in database
-        weather_data = WeatherDataFactory(
-            city=city, forecast_period="current", temperature=18.5
+        # Create weather data in database with JSONField
+        WeatherDataFactory(
+            city=city,
+            forecast_period="current",
+            data=[{"temp": 18.5, "humidity": 70}],
         )
 
         # Create subscription
@@ -87,13 +93,14 @@ class TestSubscriptionWeatherIntegration:
 
         assert create_response.status_code == status.HTTP_201_CREATED
 
-        # Mock WeatherService to return data from database
-        # (WeatherService checks Redis first, then API, not DB directly)
+        # Mock WeatherService to return data (unified format)
         with patch(
             "app.services.weather_service.WeatherService.fetch_current_weather"
         ) as mock_fetch:
-            mock_fetch.return_value = {
-                "temperature": 18.5,
+            mock_fetch.return_value = [
+                {
+                    "dt": 1609459200,
+                    "temp": 18.5,
                 "feels_like": 17.8,
                 "humidity": 70,
                 "pressure": 1015,
@@ -101,11 +108,12 @@ class TestSubscriptionWeatherIntegration:
                 "description": "partly cloudy",
                 "icon": "02d",
             }
+            ]
 
             weather_response = api_client.get(f"/api/weather/{city.id}/?period=current")
 
             assert weather_response.status_code == status.HTTP_200_OK
-            assert weather_response.data["temperature"] == 18.5
+            assert weather_response.data["data"][0]["temp"] == 18.5
             assert weather_response.data["city"]["id"] == city.id
 
     def test_update_subscription_forecast_period(self, api_client, db):
@@ -134,12 +142,14 @@ class TestSubscriptionWeatherIntegration:
         assert update_response.status_code == status.HTTP_200_OK
         assert update_response.data["forecast_period"] == "today"
 
-        # Fetch weather for 'today' period
+        # Fetch weather for 'today' period (unified format)
         with patch(
             "app.services.weather_service.WeatherService.fetch_forecast"
         ) as mock_fetch:
-            mock_fetch.return_value = {
-                "temperature": 20.0,
+            mock_fetch.return_value = [
+                {
+                    "dt": 1609459200,
+                    "temp": 20.0,
                 "feels_like": 19.5,
                 "humidity": 70,
                 "pressure": 1015,
@@ -147,6 +157,7 @@ class TestSubscriptionWeatherIntegration:
                 "description": "partly cloudy",
                 "icon": "02d",
             }
+            ]
 
             weather_response = api_client.get(f"/api/weather/{city.id}/?period=today")
 

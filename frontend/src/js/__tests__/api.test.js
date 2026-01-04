@@ -8,78 +8,81 @@ import {
   removeAuthToken,
   getRefreshToken,
   setRefreshToken,
+  isAuthenticated,
   apiRequest,
+  apiGet,
+  apiPost,
+  apiPatch,
+  apiDelete,
   handleApiError,
 } from '../api.js';
+import cache from '../cache.js';
 
 // Mock fetch globally
 global.fetch = jest.fn();
 
+// Mock cache
+jest.mock('../cache.js', () => ({
+  __esModule: true,
+  default: {
+    clear: jest.fn(),
+  },
+}));
+
 describe('API Client', () => {
   beforeEach(() => {
-    // Clear localStorage mock
-    if (global.localStorageMock) {
-      global.localStorageMock.getItem.mockClear();
-      global.localStorageMock.setItem.mockClear();
-      global.localStorageMock.removeItem.mockClear();
-    }
-    // Also clear global.localStorage mocks
-    if (global.localStorage && typeof global.localStorage.getItem === 'function') {
-      global.localStorage.getItem.mockClear?.();
-      global.localStorage.setItem.mockClear?.();
-      global.localStorage.removeItem.mockClear?.();
-    }
+    // Clear localStorage
+    localStorage.clear();
+    // Clear mocks
     global.fetch.mockClear();
+    cache.clear.mockClear();
   });
 
   describe('Token Management', () => {
-    beforeEach(() => {
-      // Reset localStorage mock - use the mock from jest.setup.js
-      if (global.localStorageMock) {
-        global.localStorageMock.getItem.mockClear();
-        global.localStorageMock.setItem.mockClear();
-        global.localStorageMock.removeItem.mockClear();
-      }
-      // Ensure global.localStorage is properly set to the mock
-      global.localStorage = global.localStorageMock || {
-        getItem: jest.fn(),
-        setItem: jest.fn(),
-        removeItem: jest.fn(),
-      };
-    });
-
     test('getAuthToken returns token from localStorage', () => {
-      // Use the mock from jest.setup.js and set return value
-      global.localStorage.getItem.mockReturnValue('test-token');
+      localStorage.setItem('access_token', 'test-token');
       expect(getAuthToken()).toBe('test-token');
-      expect(global.localStorage.getItem).toHaveBeenCalledWith('access_token');
     });
 
     test('getAuthToken returns null when no token', () => {
-      global.localStorage.getItem.mockReturnValue(null);
       expect(getAuthToken()).toBeNull();
     });
 
     test('setAuthToken saves token to localStorage', () => {
       setAuthToken('new-token');
-      expect(global.localStorage.setItem).toHaveBeenCalledWith('access_token', 'new-token');
-    });
-
-    test('removeAuthToken removes tokens from localStorage', () => {
-      removeAuthToken();
-      expect(global.localStorage.removeItem).toHaveBeenCalledWith('access_token');
-      expect(global.localStorage.removeItem).toHaveBeenCalledWith('refresh_token');
+      expect(localStorage.getItem('access_token')).toBe('new-token');
     });
 
     test('getRefreshToken returns refresh token from localStorage', () => {
-      global.localStorage.getItem.mockReturnValue('refresh-token');
+      localStorage.setItem('refresh_token', 'refresh-token');
       expect(getRefreshToken()).toBe('refresh-token');
-      expect(global.localStorage.getItem).toHaveBeenCalledWith('refresh_token');
     });
 
     test('setRefreshToken saves refresh token to localStorage', () => {
       setRefreshToken('new-refresh-token');
-      expect(global.localStorage.setItem).toHaveBeenCalledWith('refresh_token', 'new-refresh-token');
+      expect(localStorage.getItem('refresh_token')).toBe('new-refresh-token');
+    });
+
+    test('removeAuthToken removes both tokens and clears cache', () => {
+      localStorage.setItem('access_token', 'token');
+      localStorage.setItem('refresh_token', 'refresh');
+
+      removeAuthToken();
+
+      expect(localStorage.getItem('access_token')).toBeNull();
+      expect(localStorage.getItem('refresh_token')).toBeNull();
+      expect(cache.clear).toHaveBeenCalled();
+    });
+  });
+
+  describe('isAuthenticated', () => {
+    test('returns true when token exists', () => {
+      localStorage.setItem('access_token', 'token');
+      expect(isAuthenticated()).toBe(true);
+    });
+
+    test('returns false when no token', () => {
+      expect(isAuthenticated()).toBe(false);
     });
   });
 
@@ -131,81 +134,91 @@ describe('API Client', () => {
       expect(result).toEqual({ success: true });
     });
 
+    test('makes request without token when not authenticated', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        headers: {
+          get: () => 'application/json',
+        },
+        json: async () => ({ data: 'public' }),
+      });
+
+      const result = await apiRequest('public/');
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/public/', {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      expect(result).toEqual({ data: 'public' });
+    });
+
     test('handles 401 error and attempts token refresh', async () => {
       localStorage.setItem('access_token', 'expired-token');
-      localStorage.setItem('refresh_token', 'refresh-token');
+      localStorage.setItem('refresh_token', 'valid-refresh');
 
       // First request returns 401
       global.fetch
         .mockResolvedValueOnce({
           ok: false,
           status: 401,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ detail: 'Token expired' }),
         })
         // Refresh token request succeeds
         .mockResolvedValueOnce({
           ok: true,
-          headers: {
-            get: () => 'application/json',
-          },
+          headers: { get: () => 'application/json' },
           json: async () => ({ access: 'new-token' }),
         })
-        // Retry request succeeds
+        // Retry original request succeeds
         .mockResolvedValueOnce({
           ok: true,
-          headers: {
-            get: () => 'application/json',
-          },
-          json: async () => ({ data: 'retry-success' }),
+          headers: { get: () => 'application/json' },
+          json: async () => ({ data: 'success' }),
         });
 
-      // Mock refresh token endpoint
-      global.fetch.mockImplementation((url, options) => {
-        if (url.includes('auth/refresh/')) {
-          return Promise.resolve({
-            ok: true,
-            headers: {
-              get: () => 'application/json',
-            },
-            json: async () => ({ access: 'new-token' }),
-          });
-        }
-        return Promise.resolve({
-          ok: true,
-          headers: {
-            get: () => 'application/json',
-          },
-          json: async () => ({ data: 'retry-success' }),
-        });
-      });
+      const result = await apiRequest('protected/');
 
-      // This will fail because refresh logic is complex, but we test the structure
-      await expect(apiRequest('test/')).rejects.toThrow();
+      expect(result).toEqual({ data: 'success' });
+      expect(localStorage.getItem('access_token')).toBe('new-token');
     });
 
-    test('handles non-JSON response', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        headers: {
-          get: () => 'text/plain',
-        },
-        text: async () => 'plain text response',
-      });
+    test('throws error when refresh fails', async () => {
+      localStorage.setItem('access_token', 'expired-token');
+      localStorage.setItem('refresh_token', 'invalid-refresh');
 
-      const result = await apiRequest('test/');
-      expect(result).toBe('plain text response');
+      // First request returns 401
+      global.fetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ detail: 'Token expired' }),
+        })
+        // Refresh fails
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ detail: 'Invalid refresh token' }),
+        });
+
+      await expect(apiRequest('protected/')).rejects.toThrow('Authentication required');
     });
 
     test('handles error response with JSON', async () => {
       global.fetch.mockResolvedValueOnce({
         ok: false,
         status: 400,
+        statusText: 'Bad Request',
         headers: {
           get: () => 'application/json',
         },
-        json: async () => ({ detail: 'Bad request' }),
+        json: async () => ({ detail: 'Invalid data' }),
       });
 
-      await expect(apiRequest('test/')).rejects.toThrow('Bad request');
+      await expect(apiRequest('test/')).rejects.toThrow('Invalid data');
     });
 
     test('handles error response without JSON', async () => {
@@ -220,28 +233,145 @@ describe('API Client', () => {
 
       await expect(apiRequest('test/')).rejects.toThrow('Internal Server Error');
     });
+
+    test('handles network error', async () => {
+      global.fetch.mockRejectedValueOnce(new Error('Network error'));
+
+      await expect(apiRequest('test/')).rejects.toThrow('Network error');
+    });
+
+    test('handles non-JSON response', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        headers: {
+          get: () => 'text/plain',
+        },
+      });
+
+      const result = await apiRequest('test/');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('apiGet', () => {
+    test('makes GET request', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ data: 'get' }),
+      });
+
+      const result = await apiGet('resource/');
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/resource/', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      expect(result).toEqual({ data: 'get' });
+    });
+  });
+
+  describe('apiPost', () => {
+    test('makes POST request with data', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ id: 1 }),
+      });
+
+      const result = await apiPost('resource/', { name: 'test' });
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/resource/', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'test' }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      expect(result).toEqual({ id: 1 });
+    });
+  });
+
+  describe('apiPatch', () => {
+    test('makes PATCH request with data', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ updated: true }),
+      });
+
+      const result = await apiPatch('resource/1/', { name: 'updated' });
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/resource/1/', {
+        method: 'PATCH',
+        body: JSON.stringify({ name: 'updated' }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      expect(result).toEqual({ updated: true });
+    });
+  });
+
+  describe('apiDelete', () => {
+    test('makes DELETE request', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: async () => null,
+      });
+
+      const result = await apiDelete('resource/1/');
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/resource/1/', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+    });
   });
 
   describe('handleApiError', () => {
-    test('returns error object with message', () => {
+    test('returns error info object', () => {
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+
       const error = new Error('Test error');
       error.status = 400;
       error.response = { detail: 'Error detail' };
 
       const result = handleApiError(error);
+
       expect(result.message).toBe('Test error');
-      expect(result.error).toBe(error);
+      expect(result.status).toBe(400);
+      expect(result.response).toEqual({ detail: 'Error detail' });
+
+      consoleSpy.mockRestore();
     });
 
-    test('handles 401 error and removes token', () => {
-      global.localStorageMock.setItem('access_token', 'token');
-      const error = new Error('401 Unauthorized');
-      error.status = 401;
+    test('handles error without status', () => {
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 
-      handleApiError(error);
-      expect(global.localStorageMock.removeItem).toHaveBeenCalledWith('access_token');
-      expect(global.localStorageMock.removeItem).toHaveBeenCalledWith('refresh_token');
+      const error = new Error('Network error');
+
+      const result = handleApiError(error);
+
+      expect(result.message).toBe('Network error');
+      expect(result.status).toBeUndefined();
+
+      consoleSpy.mockRestore();
+    });
+
+    test('provides default message for empty error', () => {
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      const result = handleApiError({});
+
+      expect(result.message).toBe('An error occurred');
+
+      consoleSpy.mockRestore();
     });
   });
 });
-

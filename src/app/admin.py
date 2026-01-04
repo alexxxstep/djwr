@@ -165,12 +165,8 @@ class WeatherDataAdmin(admin.ModelAdmin):
     list_display = [
         "city",
         "forecast_period",
-        "temperature",
-        "feels_like",
-        "humidity",
-        "pressure",
-        "wind_speed",
-        "description",
+        "items_count",
+        "first_temp",
         "fetched_at",
     ]
     list_filter = [
@@ -178,9 +174,9 @@ class WeatherDataAdmin(admin.ModelAdmin):
         "fetched_at",
         "city__country",
     ]
-    search_fields = ["city__name", "city__country", "description"]
+    search_fields = ["city__name", "city__country"]
     ordering = ["-fetched_at"]
-    readonly_fields = ["created_at", "updated_at", "fetched_at"]
+    readonly_fields = ["created_at", "updated_at", "fetched_at", "items_count"]
     raw_id_fields = ["city"]
 
     fieldsets = (
@@ -194,26 +190,11 @@ class WeatherDataAdmin(admin.ModelAdmin):
             },
         ),
         (
-            "Temperature",
+            "Weather Data",
             {
                 "fields": (
-                    "temperature",
-                    "feels_like",
-                ),
-            },
-        ),
-        (
-            "Weather Conditions",
-            {
-                "fields": (
-                    "humidity",
-                    "pressure",
-                    "wind_speed",
-                    "wind_deg",
-                    "visibility",
-                    "clouds",
-                    "description",
-                    "icon",
+                    "items_count",
+                    "data",
                 ),
             },
         ),
@@ -228,6 +209,19 @@ class WeatherDataAdmin(admin.ModelAdmin):
             },
         ),
     )
+
+    @admin.display(description="Items")
+    def items_count(self, obj):
+        """Display number of data items."""
+        return obj.items_count
+
+    @admin.display(description="Temp (°C)")
+    def first_temp(self, obj):
+        """Display temperature from first data item."""
+        first = obj.first_item
+        if first and "temp" in first:
+            return f"{first['temp']:.1f}"
+        return "-"
 
 
 @admin.register(NotificationLog)

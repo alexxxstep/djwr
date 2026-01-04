@@ -8,7 +8,6 @@ This module tests:
 - Error handling and edge cases
 """
 
-from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -106,21 +105,54 @@ class TestCityDetailView:
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_city_detail_with_weather(self, api_client, db):
-        """Test city detail includes current weather."""
-        from decimal import Decimal
+    @patch("app.views.WeatherService")
+    def test_city_detail_with_weather(self, mock_weather_service, api_client, db):
+        """Test city detail includes current weather from JSONField."""
+        from django.utils import timezone
+        from app.models import WeatherData
 
-        city = CityFactory(name="Kyiv", country="UA")
+        # Mock WeatherService to not make real API calls
+        mock_service_instance = mock_weather_service.return_value
+        mock_service_instance.fetch_current_weather.return_value = [
+            {
+                "dt": 1609459200,
+                "temp": 15.5,
+                "feels_like": 14.8,
+                "humidity": 65,
+                "pressure": 1013,
+                "wind_speed": 3.2,
+                "description": "clear sky",
+                "icon": "01d",
+            }
+        ]
 
-        # Create weather data in database (serializer reads from DB)
-        WeatherDataFactory(
+        # Use unique city name to avoid conflicts with other tests
+        city = CityFactory(name="TestCityWeather", country="TC")
+
+        # Delete any existing weather data for this city (in case of test pollution)
+        WeatherData.objects.filter(city=city).delete()
+
+        # Create weather data directly (not via factory) to control exact values
+        weather_data = WeatherData.objects.create(
             city=city,
             forecast_period="current",
-            temperature=Decimal("15.5"),
-            humidity=65,
-            description="clear sky",
-            icon="01d",
+            data=[
+                {
+                    "dt": 1609459200,
+                    "temp": 15.5,
+                    "feels_like": 14.8,
+                    "humidity": 65,
+                    "pressure": 1013,
+                    "wind_speed": 3.2,
+                    "description": "clear sky",
+                    "icon": "01d",
+                }
+            ],
+            fetched_at=timezone.now(),
         )
+
+        # Verify data was saved correctly
+        assert weather_data.data[0]["temp"] == 15.5
 
         response = api_client.get(f"/api/cities/{city.id}/")
 
@@ -128,7 +160,8 @@ class TestCityDetailView:
         assert "current_weather" in response.data
         # current_weather should exist since we created it in DB
         assert response.data["current_weather"] is not None
-        assert str(response.data["current_weather"]["temperature"]) == "15.50"
+        # Check the response contains our data
+        assert response.data["current_weather"]["temp"] == 15.5
         assert response.data["current_weather"]["humidity"] == 65
 
     @patch("app.services.weather_service.WeatherService.fetch_current_weather")
@@ -184,7 +217,11 @@ class TestCitySearchView:
 
     @patch("app.services.city_service.WeatherService.search_cities")
     def test_city_search_api_fallback(self, mock_weather_search, api_client, db):
-        """Test city search falls back to API when not in database."""
+        """Test city search falls back to API when not in database.
+
+        Note: City search does NOT create cities in DB by default.
+        Cities are created only when user creates a subscription.
+        """
         # Mock API response
         mock_weather_search.return_value = [
             {"name": "Tokyo", "country": "JP", "lat": 35.6762, "lon": 139.6503}
@@ -197,8 +234,8 @@ class TestCitySearchView:
         assert response.data["count"] == 1
         assert response.data["results"][0]["name"] == "Tokyo"
 
-        # Verify city was created in database
-        assert City.objects.filter(name="Tokyo", country="JP").exists()
+        # City is NOT created in database (create_in_db=False by default)
+        assert not City.objects.filter(name="Tokyo", country="JP").exists()
 
     def test_city_search_no_results(self, api_client, db):
         """Test city search with no results."""
@@ -219,34 +256,42 @@ class TestWeatherView:
         return CityFactory(name="Kyiv", country="UA")
 
     def test_weather_current_success(self, api_client, city):
-        """Test successful current weather retrieval."""
+        """Test successful current weather retrieval (unified format)."""
         with patch(
             "app.services.weather_service.WeatherService.fetch_current_weather"
         ) as mock_fetch:
-            mock_fetch.return_value = {
-                "temperature": 15.5,
-                "feels_like": 14.8,
-                "humidity": 65,
-                "pressure": 1013,
-                "wind_speed": 3.2,
-                "description": "clear sky",
-                "icon": "01d",
-            }
+            # Service now returns list
+            mock_fetch.return_value = [
+                {
+                    "dt": 1609459200,
+                    "temp": 15.5,
+                    "feels_like": 14.8,
+                    "humidity": 65,
+                    "pressure": 1013,
+                    "wind_speed": 3.2,
+                    "description": "clear sky",
+                    "icon": "01d",
+                }
+            ]
 
             response = api_client.get(f"/api/weather/{city.id}/?period=current")
 
             assert response.status_code == status.HTTP_200_OK
-            assert response.data["temperature"] == 15.5
-            assert response.data["humidity"] == 65
+            # Unified response format
             assert response.data["city"]["id"] == city.id
             assert response.data["period"] == "current"
+            assert "data" in response.data
+            assert isinstance(response.data["data"], list)
+            assert response.data["items_count"] == 1
+            assert response.data["data"][0]["temp"] == 15.5
+            assert response.data["data"][0]["humidity"] == 65
 
     def test_weather_default_period(self, api_client, city):
         """Test weather endpoint uses 'current' as default period."""
         with patch(
             "app.services.weather_service.WeatherService.fetch_current_weather"
         ) as mock_fetch:
-            mock_fetch.return_value = {"temperature": 15.5, "humidity": 65}
+            mock_fetch.return_value = [{"temp": 15.5, "humidity": 65}]
 
             response = api_client.get(f"/api/weather/{city.id}/")
 
@@ -255,39 +300,45 @@ class TestWeatherView:
             mock_fetch.assert_called_once()
 
     def test_weather_forecast_today(self, api_client, city):
-        """Test weather forecast for today."""
+        """Test weather forecast for today (unified format)."""
         with patch(
             "app.services.weather_service.WeatherService.fetch_forecast"
         ) as mock_fetch:
-            mock_fetch.return_value = {
-                "temperature": 16.0,
-                "humidity": 70,
-                "description": "partly cloudy",
-            }
+            # Service now returns list
+            mock_fetch.return_value = [
+                {
+                    "dt": 1609459200,
+                    "temp": 16.0,
+                    "humidity": 70,
+                    "description": "partly cloudy",
+                }
+            ]
 
             response = api_client.get(f"/api/weather/{city.id}/?period=today")
 
             assert response.status_code == status.HTTP_200_OK
             assert response.data["period"] == "today"
+            assert "data" in response.data
+            assert response.data["items_count"] == 1
             mock_fetch.assert_called_once_with(city, "today")
 
     def test_weather_forecast_hourly(self, api_client, city):
-        """Test hourly weather forecast."""
+        """Test hourly weather forecast (unified format)."""
         with patch("app.views.WeatherService.fetch_forecast") as mock_fetch:
             mock_fetch.return_value = [
-                {"dt": "2021-01-01T00:00:00+00:00", "temperature": 15.0},
-                {"dt": "2021-01-01T03:00:00+00:00", "temperature": 16.0},
+                {"dt": 1609459200, "temp": 15.0},
+                {"dt": 1609470000, "temp": 16.0},
             ]
 
             response = api_client.get(f"/api/weather/{city.id}/?period=hourly")
 
             assert response.status_code == status.HTTP_200_OK
-            assert isinstance(response.data, list)
-            assert len(response.data) == 2
-            # Each item should have city info
-            assert "city" in response.data[0]
-            assert response.data[0]["city"]["id"] == city.id
-            assert response.data[0]["period"] == "hourly"
+            # Unified response format (always dict with data array)
+            assert response.data["city"]["id"] == city.id
+            assert response.data["period"] == "hourly"
+            assert "data" in response.data
+            assert isinstance(response.data["data"], list)
+            assert response.data["items_count"] == 2
             mock_fetch.assert_called_once_with(city, "hourly")
 
     def test_weather_invalid_city_id(self, api_client, db):
@@ -322,10 +373,10 @@ class TestWeatherView:
         """Test weather endpoint uses cached data when available."""
         import json
 
-        # Mock Redis with cached data
+        # Mock Redis with cached data (now list format)
         mock_redis = MagicMock()
         mock_redis_from_url.return_value = mock_redis
-        cached_data = {"temperature": 15.5, "humidity": 65}
+        cached_data = [{"temp": 15.5, "humidity": 65}]
         mock_redis.get.return_value = json.dumps(cached_data)
 
         # Reinitialize WeatherService with mock Redis
@@ -344,27 +395,25 @@ class TestWeatherHistoryView:
 
     @pytest.fixture
     def city(self, db):
-        """Create a test city."""
-        return CityFactory(name="Kyiv", country="UA")
+        """Create a test city with unique name for history tests."""
+        return CityFactory(name="HistoryTestCity", country="HT")
 
     def test_weather_history_success(self, api_client, city):
-        """Test successful weather history retrieval."""
+        """Test successful weather history retrieval with JSONField."""
         from django.utils import timezone
+        from app.models import WeatherData
 
-        # Create historical weather data with different fetched_at times
-        # to ensure they are separate records
-        WeatherDataFactory(
+        # Create historical weather data directly to avoid factory issues
+        WeatherData.objects.create(
             city=city,
             forecast_period="current",
-            temperature=Decimal("15.5"),
-            humidity=65,
+            data=[{"temp": 15.5, "humidity": 65}],
             fetched_at=timezone.now() - timezone.timedelta(hours=2),
         )
-        WeatherDataFactory(
+        WeatherData.objects.create(
             city=city,
             forecast_period="today",
-            temperature=Decimal("16.0"),
-            humidity=70,
+            data=[{"temp": 16.0, "humidity": 70}],
             fetched_at=timezone.now() - timezone.timedelta(hours=1),
         )
 
@@ -394,35 +443,47 @@ class TestWeatherHistoryView:
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_weather_history_pagination(self, api_client, city):
-        """Test weather history pagination."""
-        # Create more than default page size records
-        for i in range(25):
-            WeatherDataFactory(
+        """Test weather history pagination with JSONField."""
+        from django.utils import timezone
+        from app.models import WeatherData
+
+        # WeatherData has unique_together on (city, forecast_period)
+        # So we can only have 7 unique records per city (one per period)
+        # For pagination test, we use all available periods
+        periods = ["current", "hourly", "today", "tomorrow", "3days", "week", "8days"]
+        for i, period in enumerate(periods):
+            WeatherData.objects.create(
                 city=city,
-                forecast_period="current",
-                temperature=Decimal(f"{15 + i}"),
+                forecast_period=period,
+                data=[{"temp": 15 + i}],
+                fetched_at=timezone.now() - timezone.timedelta(minutes=i),
             )
 
         response = api_client.get(f"/api/weather/{city.id}/history/")
 
         assert response.status_code == status.HTTP_200_OK
-        # Should have pagination
+        # Should return all 7 records
         if "results" in response.data:
-            assert "count" in response.data or "next" in response.data
+            assert len(response.data["results"]) == 7
+        else:
+            assert len(response.data) == 7
 
     def test_weather_history_ordered_by_fetched_at(self, api_client, city):
         """Test weather history is ordered by fetched_at descending."""
         from django.utils import timezone
+        from app.models import WeatherData
 
-        # Create weather data with different fetched_at times
-        old_data = WeatherDataFactory(
+        # Create weather data with different fetched_at times and periods
+        old_data = WeatherData.objects.create(
             city=city,
-            forecast_period="current",
+            forecast_period="today",
+            data=[{"temp": 15.0}],
             fetched_at=timezone.now() - timezone.timedelta(days=2),
         )
-        new_data = WeatherDataFactory(
+        new_data = WeatherData.objects.create(
             city=city,
             forecast_period="current",
+            data=[{"temp": 16.0}],
             fetched_at=timezone.now(),
         )
 
@@ -435,7 +496,7 @@ class TestWeatherHistoryView:
         else:
             results = response.data
 
-        # First item should be the newest
+        # First item should be the newest (ordered by -fetched_at)
         assert results[0]["id"] == new_data.id
         # Old data should be later in the list
         old_ids = [item["id"] for item in results]

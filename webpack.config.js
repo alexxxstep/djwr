@@ -1,4 +1,5 @@
 const path = require("path");
+const CopyWebpackPlugin = require("copy-webpack-plugin");
 
 module.exports = {
   entry: "./frontend/src/js/main.js",
@@ -7,6 +8,18 @@ module.exports = {
     filename: "bundle.js",
     clean: true,
   },
+  plugins: [
+    // Copy favicon to dist folder during build
+    new CopyWebpackPlugin({
+      patterns: [
+        {
+          from: path.resolve(__dirname, "staticfiles/_favicon.png"),
+          to: path.resolve(__dirname, "frontend/dist/favicon.png"),
+          noErrorOnMissing: true, // Don't fail if file doesn't exist
+        },
+      ],
+    }),
+  ],
   module: {
     rules: [
       {

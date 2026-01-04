@@ -2,10 +2,10 @@
 Django REST Framework views for DjangoWeatherReminder application.
 """
 
-import json
 from datetime import datetime
 
 from django.conf import settings
+from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.views.generic import TemplateView
 from drf_spectacular.utils import (
@@ -192,6 +192,7 @@ def login_view(request):
         )
 
     normalized_email = email.lower().strip()
+
     try:
         user = User.objects.get(email=normalized_email)
     except User.DoesNotExist:
@@ -201,6 +202,7 @@ def login_view(request):
         )
 
     password_valid = user.check_password(password)
+
     if not password_valid:
         return Response(
             {"error": "Invalid email or password."},
@@ -208,17 +210,25 @@ def login_view(request):
         )
 
     # Generate JWT tokens
-    refresh = RefreshToken.for_user(user)
-    access_token = refresh.access_token
+    try:
+        refresh = RefreshToken.for_user(user)
+        access_token = refresh.access_token
+    except Exception:
+        return Response(
+            {"error": "Token generation failed."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    response_data = {
+        "user": UserSerializer(user).data,
+        "tokens": {
+            "refresh": str(refresh),
+            "access": str(access_token),
+        },
+    }
 
     return Response(
-        {
-            "user": UserSerializer(user).data,
-            "tokens": {
-                "refresh": str(refresh),
-                "access": str(access_token),
-            },
-        },
+        response_data,
         status=status.HTTP_200_OK,
     )
 
@@ -665,48 +675,372 @@ def city_search_view(request):
 @extend_schema(
     tags=["Weather"],
     summary="Get Weather Data",
-    description=(
-        "Get weather data for a city. Supports different forecast periods: "
-        "current, today, tomorrow, 3days, week, hourly."
-    ),
+    description="""
+Get weather data for a city with different forecast periods.
+
+## Available Periods
+
+| Period | Description | Items Count | Data Source |
+|--------|-------------|-------------|-------------|
+| `current` | Current weather conditions | 1 | Real-time data |
+| `hourly` | Hourly forecast for next 48 hours | up to 48 | Hourly forecast |
+| `today` | Today's daily forecast | 1 | Daily forecast |
+| `tomorrow` | Tomorrow's daily forecast | 1 | Daily forecast |
+| `3days` | 3-day forecast | 3 | Daily forecast |
+| `week` | 7-day forecast (max available) | 7 | Daily forecast |
+
+## Response Structure
+
+All responses have unified format with `data` always being an array:
+
+```json
+{
+  "city": {"id": 1, "name": "Kyiv", "country": "UA"},
+  "period": "current",
+  "data": [...],
+  "items_count": 1,
+  "fetched_at": "2024-01-01T12:00:00Z"
+}
+```
+
+## Data Fields
+
+### For `current` and `hourly` periods:
+- `dt` - Unix timestamp
+- `temp` - Temperature (°C)
+- `feels_like` - Feels like temperature (°C)
+- `humidity` - Humidity (%)
+- `pressure` - Atmospheric pressure (hPa)
+- `wind_speed` - Wind speed (m/s)
+- `wind_deg` - Wind direction (degrees)
+- `visibility` - Visibility (meters)
+- `clouds` - Cloudiness (%)
+- `uvi` - UV index
+- `description` - Weather description
+- `icon` - Weather icon code
+
+### For daily periods (`today`, `tomorrow`, `3days`, `week`):
+All fields above plus:
+- `temp_min` - Minimum temperature (°C)
+- `temp_max` - Maximum temperature (°C)
+- `pop` - Probability of precipitation (0-1)
+- `rain` - Rain volume (mm, if applicable)
+- `snow` - Snow volume (mm, if applicable)
+
+## Caching
+
+Data is cached in Redis with period-specific TTL:
+- `current`: 10 minutes
+- `hourly`: 30 minutes
+- `today`, `tomorrow`: 1 hour
+- `3days`, `week`: 3 hours
+    """,
     parameters=[
-        {
-            "name": "period",
-            "in": "query",
-            "required": False,
-            "schema": {"type": "string", "default": "current"},
-            "description": "Forecast period",
-            "enum": [
+        OpenApiParameter(
+            name="period",
+            type=str,
+            location=OpenApiParameter.QUERY,
+            required=False,
+            default="current",
+            description=(
+                "Forecast period. Options: current, hourly, today, "
+                "tomorrow, 3days, week"
+            ),
+            enum=[
                 "current",
+                "hourly",
                 "today",
                 "tomorrow",
                 "3days",
                 "week",
-                "hourly",
-                "10days",
-                "2weeks",
-                "month",
             ],
-        }
+        )
     ],
-    responses={
-        200: OpenApiExample(
-            "Success Response",
+    examples=[
+        OpenApiExample(
+            "Current Weather",
+            summary="Current weather (period=current)",
+            description="Returns single item with current conditions",
             value={
                 "city": {"id": 1, "name": "Kyiv", "country": "UA"},
                 "period": "current",
-                "temperature": 15.5,
-                "feels_like": 14.8,
-                "humidity": 65,
-                "pressure": 1013,
-                "wind_speed": 3.2,
-                "description": "clear sky",
-                "icon": "01d",
+                "data": [
+                    {
+                        "dt": 1704283200,
+                        "temp": 5.2,
+                        "feels_like": 2.1,
+                        "humidity": 78,
+                        "pressure": 1015,
+                        "wind_speed": 4.5,
+                        "wind_deg": 180,
+                        "visibility": 10000,
+                        "clouds": 75,
+                        "uvi": 0.5,
+                        "description": "overcast clouds",
+                        "icon": "04d",
+                    }
+                ],
+                "items_count": 1,
+                "fetched_at": "2026-01-03T12:00:00Z",
+            },
+        ),
+        OpenApiExample(
+            "Hourly Forecast",
+            summary="Hourly forecast (period=hourly)",
+            description="Returns up to 48 hourly forecasts",
+            value={
+                "city": {"id": 1, "name": "Kyiv", "country": "UA"},
+                "period": "hourly",
+                "data": [
+                    {
+                        "dt": 1704283200,
+                        "temp": 5.2,
+                        "feels_like": 2.1,
+                        "humidity": 78,
+                        "pressure": 1015,
+                        "wind_speed": 4.5,
+                        "wind_deg": 180,
+                        "visibility": 10000,
+                        "clouds": 75,
+                        "uvi": 0.5,
+                        "pop": 0.2,
+                        "description": "overcast clouds",
+                        "icon": "04d",
+                    },
+                    {
+                        "dt": 1704286800,
+                        "temp": 4.8,
+                        "feels_like": 1.5,
+                        "humidity": 82,
+                        "pressure": 1016,
+                        "wind_speed": 5.1,
+                        "wind_deg": 190,
+                        "visibility": 10000,
+                        "clouds": 80,
+                        "uvi": 0.3,
+                        "pop": 0.35,
+                        "description": "light rain",
+                        "icon": "10d",
+                    },
+                ],
+                "items_count": 48,
+                "fetched_at": "2026-01-03T12:00:00Z",
+            },
+        ),
+        OpenApiExample(
+            "Today Forecast",
+            summary="Today's forecast (period=today)",
+            description="Returns single daily forecast for today",
+            value={
+                "city": {"id": 1, "name": "Kyiv", "country": "UA"},
+                "period": "today",
+                "data": [
+                    {
+                        "dt": 1704283200,
+                        "temp": 6.5,
+                        "temp_min": 2.1,
+                        "temp_max": 8.3,
+                        "feels_like": 4.2,
+                        "humidity": 72,
+                        "pressure": 1015,
+                        "wind_speed": 4.5,
+                        "wind_deg": 180,
+                        "clouds": 75,
+                        "uvi": 1.2,
+                        "pop": 0.15,
+                        "description": "overcast clouds",
+                        "icon": "04d",
+                    }
+                ],
+                "items_count": 1,
+                "fetched_at": "2026-01-03T12:00:00Z",
+            },
+        ),
+        OpenApiExample(
+            "Week Forecast",
+            summary="7-day forecast (period=week)",
+            description="Returns 7 daily forecasts",
+            value={
+                "city": {"id": 1, "name": "Kyiv", "country": "UA"},
+                "period": "week",
+                "data": [
+                    {
+                        "dt": 1704283200,
+                        "temp": 6.5,
+                        "temp_min": 2.1,
+                        "temp_max": 8.3,
+                        "feels_like": 4.2,
+                        "humidity": 72,
+                        "pressure": 1015,
+                        "wind_speed": 4.5,
+                        "pop": 0.15,
+                        "description": "overcast clouds",
+                        "icon": "04d",
+                    },
+                    {
+                        "dt": 1704369600,
+                        "temp": 4.2,
+                        "temp_min": 0.5,
+                        "temp_max": 5.8,
+                        "feels_like": 1.8,
+                        "humidity": 85,
+                        "pressure": 1012,
+                        "wind_speed": 6.2,
+                        "pop": 0.65,
+                        "rain": 2.5,
+                        "description": "light rain",
+                        "icon": "10d",
+                    },
+                ],
+                "items_count": 7,
+                "fetched_at": "2026-01-03T12:00:00Z",
+            },
+        ),
+    ],
+    responses={
+        200: {
+            "description": "Weather data retrieved successfully",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "city": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "integer", "example": 1},
+                                    "name": {"type": "string", "example": "Kyiv"},
+                                    "country": {"type": "string", "example": "UA"},
+                                },
+                            },
+                            "period": {
+                                "type": "string",
+                                "enum": [
+                                    "current",
+                                    "hourly",
+                                    "today",
+                                    "tomorrow",
+                                    "3days",
+                                    "week",
+                                ],
+                                "example": "current",
+                            },
+                            "data": {
+                                "type": "array",
+                                "description": "Weather data array (always array)",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "dt": {
+                                            "type": "integer",
+                                            "description": "Unix timestamp",
+                                        },
+                                        "temp": {
+                                            "type": "number",
+                                            "description": "Temperature (°C)",
+                                        },
+                                        "temp_min": {
+                                            "type": "number",
+                                            "nullable": True,
+                                            "description": "Min temp (daily only)",
+                                        },
+                                        "temp_max": {
+                                            "type": "number",
+                                            "nullable": True,
+                                            "description": "Max temp (daily only)",
+                                        },
+                                        "feels_like": {
+                                            "type": "number",
+                                            "description": "Feels like (°C)",
+                                        },
+                                        "humidity": {
+                                            "type": "integer",
+                                            "description": "Humidity (%)",
+                                        },
+                                        "pressure": {
+                                            "type": "integer",
+                                            "description": "Pressure (hPa)",
+                                        },
+                                        "wind_speed": {
+                                            "type": "number",
+                                            "description": "Wind speed (m/s)",
+                                        },
+                                        "wind_deg": {
+                                            "type": "integer",
+                                            "nullable": True,
+                                            "description": "Wind direction (°)",
+                                        },
+                                        "visibility": {
+                                            "type": "integer",
+                                            "nullable": True,
+                                            "description": "Visibility (m)",
+                                        },
+                                        "clouds": {
+                                            "type": "integer",
+                                            "nullable": True,
+                                            "description": "Cloudiness (%)",
+                                        },
+                                        "uvi": {
+                                            "type": "number",
+                                            "nullable": True,
+                                            "description": "UV index",
+                                        },
+                                        "pop": {
+                                            "type": "number",
+                                            "nullable": True,
+                                            "description": "Precipitation prob",
+                                        },
+                                        "rain": {
+                                            "type": "number",
+                                            "nullable": True,
+                                            "description": "Rain volume (mm)",
+                                        },
+                                        "snow": {
+                                            "type": "number",
+                                            "nullable": True,
+                                            "description": "Snow volume (mm)",
+                                        },
+                                        "description": {
+                                            "type": "string",
+                                            "description": "Weather description",
+                                        },
+                                        "icon": {
+                                            "type": "string",
+                                            "description": "Icon code",
+                                        },
+                                    },
+                                },
+                            },
+                            "items_count": {
+                                "type": "integer",
+                                "description": "Number of items in data array",
+                            },
+                            "fetched_at": {
+                                "type": "string",
+                                "format": "date-time",
+                                "description": "Timestamp when data was fetched",
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        400: OpenApiExample(
+            "Invalid Period",
+            value={
+                "error": (
+                    "Invalid period. Valid options: current, hourly, "
+                    "today, tomorrow, 3days, week"
+                )
             },
         ),
         404: OpenApiExample(
-            "Not Found",
-            value={"detail": "City not found."},
+            "City Not Found",
+            value={"detail": "Not found."},
+        ),
+        500: OpenApiExample(
+            "Server Error",
+            value={"error": "Failed to fetch weather data. Please try again later."},
         ),
     },
 )
@@ -718,22 +1052,31 @@ def weather_view(request, city_id):
 
     GET /api/weather/{city_id}/?period={period}
     Returns weather data for a city.
-    Period options: current, today, tomorrow, 3days, week, hourly
+    Period options: current, hourly, today, tomorrow, 3days, week
     Default period: current
+
+    Response format (unified):
+    {
+        "city": {"id": 1, "name": "Kyiv", "country": "UA"},
+        "period": "current",
+        "data": [...],  # Always array
+        "items_count": 1,
+        "fetched_at": "2024-01-01T12:00:00Z"
+    }
     """
+    from django.utils import timezone
+    import logging
+
     period = request.query_params.get("period", "current").strip()
 
     # Validate period
     valid_periods = [
         "current",
+        "hourly",
         "today",
         "tomorrow",
         "3days",
         "week",
-        "hourly",
-        "10days",
-        "2weeks",
-        "month",
     ]
     if period not in valid_periods:
         return Response(
@@ -748,12 +1091,22 @@ def weather_view(request, city_id):
     weather_service = WeatherService()
     try:
         if period == "current":
-            weather_data = weather_service.fetch_current_weather(city)
+            result = weather_service.fetch_current_weather(city)
+            if isinstance(result, tuple):
+                weather_data, timezone_offset = result
+            else:
+                # Fallback for cached data without timezone_offset
+                weather_data = result
+                timezone_offset = 0
         else:
-            weather_data = weather_service.fetch_forecast(city, period)
+            result = weather_service.fetch_forecast(city, period)
+            if isinstance(result, tuple):
+                weather_data, timezone_offset = result
+            else:
+                # Fallback for cached data without timezone_offset
+                weather_data = result
+                timezone_offset = 0
     except Exception as e:
-        import logging
-
         logger = logging.getLogger(__name__)
         logger.error(f"Failed to fetch weather for {city.name}: {e}")
         return Response(
@@ -761,33 +1114,19 @@ def weather_view(request, city_id):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
-    # Add city info to response
-    # Handle both dict (single forecast) and list (hourly forecast)
-    if isinstance(weather_data, list):
-        # For hourly forecasts, return list with city info in each item
-        response_data = [
-            {
-                "city": {
-                    "id": city.id,
-                    "name": city.name,
-                    "country": city.country,
-                },
-                "period": period,
-                **item,
-            }
-            for item in weather_data
-        ]
-    else:
-        # For single forecasts, return dict
-        response_data = {
-            "city": {
-                "id": city.id,
-                "name": city.name,
-                "country": city.country,
-            },
-            "period": period,
-            **weather_data,
-        }
+    # Unified response format - weather_data is always a list now
+    response_data = {
+        "city": {
+            "id": city.id,
+            "name": city.name,
+            "country": city.country,
+        },
+        "period": period,
+        "data": weather_data,
+        "items_count": len(weather_data),
+        "fetched_at": timezone.now().isoformat(),
+        "timezone_offset": timezone_offset,  # Timezone offset in seconds
+    }
 
     return Response(response_data, status=status.HTTP_200_OK)
 
@@ -795,12 +1134,104 @@ def weather_view(request, city_id):
 @extend_schema(
     tags=["Weather"],
     summary="Weather History",
-    description="Get historical weather data for a city from database.",
+    description="""
+Get historical weather data for a city from database.
+
+Returns cached weather records stored in database, ordered by fetch time (newest first).
+Each record contains weather data for a specific forecast period.
+
+## Response Structure
+
+Paginated response with weather history records:
+
+```json
+{
+  "count": 10,
+  "next": "http://api/weather/1/history/?page=2",
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "city": 1,
+      "forecast_period": "current",
+      "data": [...],
+      "items_count": 1,
+      "fetched_at": "2026-01-03T12:00:00Z"
+    }
+  ]
+}
+```
+
+## Use Cases
+
+- View historical weather data for analytics
+- Debug caching behavior
+- Compare weather changes over time
+    """,
+    parameters=[
+        OpenApiParameter(
+            name="page",
+            type=int,
+            location=OpenApiParameter.QUERY,
+            required=False,
+            default=1,
+            description="Page number for pagination",
+        )
+    ],
+    examples=[
+        OpenApiExample(
+            "Weather History Response",
+            summary="Paginated weather history",
+            value={
+                "count": 25,
+                "next": "http://localhost:8000/api/weather/1/history/?page=2",
+                "previous": None,
+                "results": [
+                    {
+                        "id": 1,
+                        "city": 1,
+                        "forecast_period": "current",
+                        "data": [
+                            {
+                                "dt": 1704283200,
+                                "temp": 5.2,
+                                "feels_like": 2.1,
+                                "humidity": 78,
+                                "pressure": 1015,
+                                "wind_speed": 4.5,
+                                "description": "overcast clouds",
+                                "icon": "04d",
+                            }
+                        ],
+                        "items_count": 1,
+                        "fetched_at": "2026-01-03T12:00:00Z",
+                    },
+                    {
+                        "id": 2,
+                        "city": 1,
+                        "forecast_period": "week",
+                        "data": [
+                            {
+                                "dt": 1704283200,
+                                "temp": 6.5,
+                                "temp_min": 2.1,
+                                "temp_max": 8.3,
+                                "description": "cloudy",
+                                "icon": "03d",
+                            },
+                        ],
+                        "items_count": 7,
+                        "fetched_at": "2026-01-03T11:30:00Z",
+                    },
+                ],
+            },
+        ),
+    ],
     responses={
         200: WeatherDataSerializer(many=True),
         404: OpenApiExample(
-            "Not Found",
-            value={"detail": "City not found."},
+            "City Not Found",
+            value={"detail": "Not found."},
         ),
     },
 )
@@ -812,7 +1243,7 @@ def weather_history_view(request, city_id):
 
     GET /api/weather/{city_id}/history/
     Returns historical weather data from database.
-    Ordered by fetched_at descending, paginated.
+    Ordered by fetched_at descending, paginated (20 items per page).
     """
     # Get city
     city = get_object_or_404(City, pk=city_id)
@@ -834,7 +1265,9 @@ def weather_history_view(request, city_id):
     paginated_history = paginator.paginate_queryset(weather_history, request)
 
     serializer = WeatherDataSerializer(paginated_history, many=True)
-    return paginator.get_paginated_response(serializer.data)
+    response_data = paginator.get_paginated_response(serializer.data)
+
+    return response_data
 
 
 # Subscription Permissions
@@ -853,10 +1286,109 @@ class IsSubscriptionOwner(BasePermission):
 # Subscription Views
 @extend_schema(
     tags=["Subscriptions"],
-    summary="List Subscriptions",
-    description="Get paginated list of current user's subscriptions.",
+    summary="List and Create Subscriptions",
+    description="""
+Manage weather subscriptions for cities.
+
+## GET - List Subscriptions
+
+Returns paginated list of current user's subscriptions with city details.
+
+## POST - Create Subscription
+
+Create a new subscription for a city with specified forecast period and notification interval.
+
+### Available Forecast Periods
+
+| Period | Description | Data Items |
+|--------|-------------|------------|
+| `current` | Current weather | 1 |
+| `hourly` | Hourly forecast (48h) | up to 48 |
+| `today` | Today's forecast | 1 |
+| `tomorrow` | Tomorrow's forecast | 1 |
+| `3days` | 3-day forecast | 3 |
+| `week` | 7-day forecast (max available) | 7 |
+
+### Notification Periods (hours)
+
+Available intervals: 1, 3, 6, 12, 24 hours
+
+### Request Body Example
+
+```json
+{
+  "city_id": 1,
+  "forecast_period": "week",
+  "notification_period": 6
+}
+```
+    """,
+    examples=[
+        OpenApiExample(
+            "Create Subscription",
+            summary="Create weekly forecast subscription",
+            request_only=True,
+            value={
+                "city_id": 1,
+                "forecast_period": "week",
+                "notification_period": 6,
+            },
+        ),
+        OpenApiExample(
+            "Subscription List Response",
+            summary="List of user subscriptions",
+            response_only=True,
+            value={
+                "count": 2,
+                "next": None,
+                "previous": None,
+                "results": [
+                    {
+                        "id": 1,
+                        "city": {
+                            "id": 1,
+                            "name": "Kyiv",
+                            "country": "UA",
+                            "latitude": "50.4501",
+                            "longitude": "30.5234",
+                        },
+                        "forecast_period": "current",
+                        "notification_period": 1,
+                        "is_active": True,
+                        "created_at": "2026-01-01T10:00:00Z",
+                        "updated_at": "2026-01-01T10:00:00Z",
+                    },
+                    {
+                        "id": 2,
+                        "city": {
+                            "id": 2,
+                            "name": "London",
+                            "country": "GB",
+                            "latitude": "51.5074",
+                            "longitude": "-0.1278",
+                        },
+                        "forecast_period": "week",
+                        "notification_period": 12,
+                        "is_active": True,
+                        "created_at": "2026-01-02T15:30:00Z",
+                        "updated_at": "2026-01-02T15:30:00Z",
+                    },
+                ],
+            },
+        ),
+    ],
     responses={
         200: SubscriptionSerializer(many=True),
+        201: SubscriptionSerializer,
+        400: OpenApiExample(
+            "Validation Error",
+            value={
+                "forecast_period": [
+                    "Invalid period. Choose from: current, hourly, today, "
+                    "tomorrow, 3days, week"
+                ]
+            },
+        ),
         401: OpenApiExample(
             "Unauthorized",
             value={"detail": "Authentication credentials were not provided."},
@@ -894,15 +1426,82 @@ class SubscriptionListCreateView(generics.ListCreateAPIView):
 @extend_schema(
     tags=["Subscriptions"],
     summary="Subscription Details, Update, Delete",
-    description=(
-        "Get, update, or delete subscription. " "Only accessible by subscription owner."
-    ),
+    description="""
+Get, update, or delete a subscription. Only accessible by subscription owner.
+
+## GET - Subscription Details
+
+Returns full subscription details including city information.
+
+## PATCH/PUT - Update Subscription
+
+Update subscription settings:
+- `forecast_period` - Weather forecast type
+- `notification_period` - Notification interval in hours
+- `is_active` - Enable/disable subscription
+
+### Available Forecast Periods
+
+| Period | Description |
+|--------|-------------|
+| `current` | Current weather |
+| `hourly` | Hourly forecast (48h) |
+| `today` | Today's forecast |
+| `tomorrow` | Tomorrow's forecast |
+| `3days` | 3-day forecast |
+| `week` | 7-day forecast (max available) |
+
+### Notification Periods
+
+Available intervals: 1, 3, 6, 12, 24 hours
+
+## DELETE - Remove Subscription
+
+Permanently removes the subscription.
+    """,
+    examples=[
+        OpenApiExample(
+            "Update Subscription",
+            summary="Change to weekly forecast with 12h notifications",
+            request_only=True,
+            value={
+                "forecast_period": "week",
+                "notification_period": 12,
+            },
+        ),
+        OpenApiExample(
+            "Subscription Detail Response",
+            summary="Full subscription details",
+            response_only=True,
+            value={
+                "id": 1,
+                "city": {
+                    "id": 1,
+                    "name": "Kyiv",
+                    "country": "UA",
+                    "latitude": "50.4501",
+                    "longitude": "30.5234",
+                },
+                "forecast_period": "week",
+                "notification_period": 12,
+                "is_active": True,
+                "created_at": "2026-01-01T10:00:00Z",
+                "updated_at": "2026-01-03T14:00:00Z",
+            },
+        ),
+    ],
     responses={
         200: SubscriptionSerializer,
-        204: OpenApiExample("No Content", value=None),
+        204: OpenApiExample("Deleted", value=None),
         400: OpenApiExample(
             "Validation Error",
-            value={"period": ["Period must be one of: 1, 3, 6, 12"]},
+            value={
+                "forecast_period": [
+                    "Invalid period. Choose from: current, hourly, today, "
+                    "tomorrow, 3days, week"
+                ],
+                "notification_period": ["Period must be one of: 1, 3, 6, 12, 24"],
+            },
         ),
         404: OpenApiExample(
             "Not Found",
