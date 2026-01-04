@@ -10,11 +10,15 @@ This module tests end-to-end workflows:
 
 from unittest.mock import patch
 
-import pytest
 from rest_framework import status
 
-from app.models import Subscription, WeatherData
-from tests.factories import CityFactory, SubscriptionFactory, UserFactory, WeatherDataFactory
+from app.models import Subscription
+from tests.factories import (
+    CityFactory,
+    SubscriptionFactory,
+    UserFactory,
+    WeatherDataFactory,
+)
 
 
 class TestSubscriptionWeatherIntegration:
@@ -48,13 +52,13 @@ class TestSubscriptionWeatherIntegration:
                 {
                     "dt": 1609459200,
                     "temp": 15.5,
-                "feels_like": 14.8,
-                "humidity": 65,
-                "pressure": 1013,
-                "wind_speed": 3.2,
-                "description": "clear sky",
-                "icon": "01d",
-            }
+                    "feels_like": 14.8,
+                    "humidity": 65,
+                    "pressure": 1013,
+                    "wind_speed": 3.2,
+                    "description": "clear sky",
+                    "icon": "01d",
+                }
             ]
 
             weather_response = api_client.get(f"/api/weather/{city.id}/?period=current")
@@ -101,13 +105,13 @@ class TestSubscriptionWeatherIntegration:
                 {
                     "dt": 1609459200,
                     "temp": 18.5,
-                "feels_like": 17.8,
-                "humidity": 70,
-                "pressure": 1015,
-                "wind_speed": 4.0,
-                "description": "partly cloudy",
-                "icon": "02d",
-            }
+                    "feels_like": 17.8,
+                    "humidity": 70,
+                    "pressure": 1015,
+                    "wind_speed": 4.0,
+                    "description": "partly cloudy",
+                    "icon": "02d",
+                }
             ]
 
             weather_response = api_client.get(f"/api/weather/{city.id}/?period=current")
@@ -150,13 +154,13 @@ class TestSubscriptionWeatherIntegration:
                 {
                     "dt": 1609459200,
                     "temp": 20.0,
-                "feels_like": 19.5,
-                "humidity": 70,
-                "pressure": 1015,
-                "wind_speed": 4.0,
-                "description": "partly cloudy",
-                "icon": "02d",
-            }
+                    "feels_like": 19.5,
+                    "humidity": 70,
+                    "pressure": 1015,
+                    "wind_speed": 4.0,
+                    "description": "partly cloudy",
+                    "icon": "02d",
+                }
             ]
 
             weather_response = api_client.get(f"/api/weather/{city.id}/?period=today")
@@ -378,4 +382,3 @@ class TestSubscriptionPermissionsIntegration:
         assert list_response.status_code == status.HTTP_200_OK
         assert list_response.data["count"] == 1
         assert list_response.data["results"][0]["city"]["id"] == city3.id
-

@@ -1,10 +1,11 @@
 """
 Test authentication flow manually.
 """
+
 import requests
-import json
 
 BASE_URL = "http://localhost:8000/api"
+
 
 def test_auth():
     """Test authentication flow."""
@@ -32,13 +33,15 @@ def test_auth():
         print(f"   Status: {response.status_code}")
         if response.status_code == 201:
             data = response.json()
-            print(f"   ✅ Registration successful")
+            print("   ✅ Registration successful")
             print(f"   User ID: {data.get('user', {}).get('id')}")
             print(f"   Has tokens: {bool(data.get('tokens'))}")
             access_token = data.get("tokens", {}).get("access")
             refresh_token = data.get("tokens", {}).get("refresh")
             print(f"   Access token length: {len(access_token) if access_token else 0}")
-            print(f"   Refresh token length: {len(refresh_token) if refresh_token else 0}")
+            print(
+                f"   Refresh token length: {len(refresh_token) if refresh_token else 0}"
+            )
         else:
             print(f"   ❌ Registration failed: {response.text}")
             return
@@ -62,11 +65,13 @@ def test_auth():
         print(f"   Status: {response.status_code}")
         if response.status_code == 200:
             data = response.json()
-            print(f"   ✅ Login successful")
+            print("   ✅ Login successful")
             access_token = data.get("tokens", {}).get("access")
             refresh_token = data.get("tokens", {}).get("refresh")
             print(f"   Access token length: {len(access_token) if access_token else 0}")
-            print(f"   Refresh token length: {len(refresh_token) if refresh_token else 0}")
+            print(
+                f"   Refresh token length: {len(refresh_token) if refresh_token else 0}"
+            )
 
             # Test 3: Get user profile with token
             print("\n3. Testing Get User Profile (with token)...")
@@ -81,7 +86,7 @@ def test_auth():
             print(f"   Status: {response.status_code}")
             if response.status_code == 200:
                 data = response.json()
-                print(f"   ✅ Profile retrieved successfully")
+                print("   ✅ Profile retrieved successfully")
                 print(f"   User email: {data.get('email')}")
                 print(f"   User ID: {data.get('id')}")
             else:
@@ -106,7 +111,7 @@ def test_auth():
         )
         print(f"   Status: {response.status_code}")
         if response.status_code == 401:
-            print(f"   ✅ Correctly rejected invalid password")
+            print("   ✅ Correctly rejected invalid password")
         else:
             print(f"   ❌ Should return 401, got {response.status_code}")
     except Exception as e:
@@ -116,6 +121,6 @@ def test_auth():
     print("TEST COMPLETE")
     print("=" * 60)
 
+
 if __name__ == "__main__":
     test_auth()
-

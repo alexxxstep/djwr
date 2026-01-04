@@ -23,7 +23,9 @@ class CityService:
         """Initialize CityService with WeatherService."""
         self.weather_service = WeatherService()
 
-    def search_cities(self, query: str, create_in_db: bool = False) -> list[dict | City]:
+    def search_cities(
+        self, query: str, create_in_db: bool = False
+    ) -> list[dict | City]:
         """
         Search cities using database-first approach.
 
@@ -82,7 +84,9 @@ class CityService:
             return result_cities
         else:
             # Return API data as dictionaries (no DB creation)
-            logger.info(f"Returning {len(api_cities)} cities from API (not creating in DB)")
+            logger.info(
+                f"Returning {len(api_cities)} cities from API (not creating in DB)"
+            )
             return api_cities
 
     def get_or_create_city(

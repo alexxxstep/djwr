@@ -8,7 +8,6 @@ This module tests:
 - Unique constraint (user cannot subscribe to same city twice)
 """
 
-import pytest
 from rest_framework import status
 
 from app.models import Subscription
@@ -387,7 +386,7 @@ class TestSubscriptionValidation:
         valid_periods = [1, 3, 6, 12]
         cities = [CityFactory() for _ in valid_periods]
 
-        for period, city in zip(valid_periods, cities):
+        for period, city in zip(valid_periods, cities, strict=True):
             data = {
                 "city_id": city.id,
                 "period": period,
@@ -467,4 +466,3 @@ class TestSubscriptionValidation:
         }
         response = api_client.post("/api/subscriptions/", data)
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-

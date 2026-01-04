@@ -76,7 +76,9 @@ class WeatherDataFactory(factory.django.DjangoModelFactory):
 
     city = factory.SubFactory(CityFactory)
     forecast_period = "current"
-    data = factory.LazyAttribute(lambda obj: _generate_weather_data(obj.forecast_period))
+    data = factory.LazyAttribute(
+        lambda obj: _generate_weather_data(obj.forecast_period)
+    )
     fetched_at = factory.LazyFunction(
         lambda: timezone.make_aware(fake.date_time_this_month())
     )
@@ -103,7 +105,9 @@ def _generate_weather_data(forecast_period: str) -> list[dict]:
             "rain": round(random.uniform(0, 10), 2) if random.random() > 0.7 else None,
             "snow": round(random.uniform(0, 10), 2) if random.random() > 0.9 else None,
             "description": fake.sentence(nb_words=3),
-            "icon": random.choice(["01d", "02d", "03d", "04d", "09d", "10d", "11d", "13d", "50d"]),
+            "icon": random.choice(
+                ["01d", "02d", "03d", "04d", "09d", "10d", "11d", "13d", "50d"]
+            ),
         }
 
     base_timestamp = int(time.time())

@@ -197,8 +197,7 @@ class TestWeatherData:
         weather_data = WeatherDataFactory(forecast_period="current")
         count = len(weather_data.data)
         expected = (
-            f"{weather_data.city.name} - "
-            f"{weather_data.forecast_period} ({count} items)"
+            f"{weather_data.city.name} - {weather_data.forecast_period} ({count} items)"
         )
         assert str(weather_data) == expected
 

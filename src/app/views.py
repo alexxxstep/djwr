@@ -2,11 +2,8 @@
 Django REST Framework views for DjangoWeatherReminder application.
 """
 
-from datetime import datetime
-
-from django.conf import settings
-from django.utils import timezone
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.views.generic import TemplateView
 from drf_spectacular.utils import (
     OpenApiExample,
@@ -1064,7 +1061,6 @@ def weather_view(request, city_id):
         "fetched_at": "2024-01-01T12:00:00Z"
     }
     """
-    from django.utils import timezone
     import logging
 
     period = request.query_params.get("period", "current").strip()

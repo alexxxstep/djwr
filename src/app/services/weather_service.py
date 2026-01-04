@@ -11,7 +11,6 @@ Cache-first approach reduces API calls by 70-90%.
 
 import json
 import logging
-import os
 from datetime import UTC
 
 import redis
@@ -22,6 +21,7 @@ from django.utils import timezone
 from app.models import City, WeatherData
 
 logger = logging.getLogger(__name__)
+
 
 class WeatherService:
     """Service for fetching weather data from OpenWeatherMap API."""
@@ -327,28 +327,30 @@ class WeatherService:
             # Today's forecast - filter hourly data for today with 3-hour intervals
             # Starting at 2AM local time: 2, 5, 8, 11, 14, 17, 20, 23
             # Includes history (past hours) and future hours
-            from datetime import datetime, timezone, timedelta
+            from datetime import datetime, timedelta
 
             # Get timezone offset from API response (in seconds)
-            timezone_offset_seconds = api_data.get("timezone_offset", 0)  # Default to 0 (UTC)
-            timezone_offset_hours = timezone_offset_seconds / 3600
+            timezone_offset_seconds = api_data.get(
+                "timezone_offset", 0
+            )  # Default to 0 (UTC)
 
             # Target hours in local time
             target_local_hours = [2, 5, 8, 11, 14, 17, 20, 23]
 
-            # Convert local hours to UTC hours
-            target_utc_hours = [(h - int(timezone_offset_hours)) % 24 for h in target_local_hours]
-
             # Get current UTC time
-            now_utc = datetime.now(timezone.utc)
+            now_utc = datetime.now(UTC)
 
             # Calculate local time by adding timezone offset
             now_local = now_utc + timedelta(seconds=timezone_offset_seconds)
 
             # Get start of today in local time (midnight local time)
-            today_start_local = datetime(now_local.year, now_local.month, now_local.day, tzinfo=timezone.utc)
+            today_start_local = datetime(
+                now_local.year, now_local.month, now_local.day, tzinfo=UTC
+            )
             # Convert to UTC timestamp (subtract offset to get UTC equivalent of local midnight)
-            today_start_utc = today_start_local - timedelta(seconds=timezone_offset_seconds)
+            today_start_utc = today_start_local - timedelta(
+                seconds=timezone_offset_seconds
+            )
             today_start = today_start_utc.timestamp()
             today_end = today_start + 86400  # 24 hours
 
@@ -358,13 +360,15 @@ class WeatherService:
                 # Check if timestamp is within today's range (in local time)
                 if today_start <= dt < today_end:
                     # Convert timestamp to local datetime to check if it's actually today
-                    item_utc = datetime.fromtimestamp(dt, tz=timezone.utc)
+                    item_utc = datetime.fromtimestamp(dt, tz=UTC)
                     item_local = item_utc + timedelta(seconds=timezone_offset_seconds)
 
                     # Check if item's local date matches today's local date
-                    if (item_local.year == now_local.year and
-                        item_local.month == now_local.month and
-                        item_local.day == now_local.day):
+                    if (
+                        item_local.year == now_local.year
+                        and item_local.month == now_local.month
+                        and item_local.day == now_local.day
+                    ):
                         # Check if hour matches target hours
                         if item_local.hour in target_local_hours:
                             today_items.append(item)
@@ -376,7 +380,7 @@ class WeatherService:
         elif period == "tomorrow":
             # Tomorrow's forecast - filter hourly data for tomorrow with 3-hour intervals
             # Starting at 2AM local time: 2, 5, 8, 11, 14, 17, 20, 23
-            from datetime import datetime, timezone, timedelta
+            from datetime import datetime, timedelta
 
             # Get timezone offset from API response (in seconds)
             # OpenWeatherMap API returns timezone_offset in the root of the response
@@ -422,26 +426,31 @@ class WeatherService:
             # But we don't have it in this method. Let's modify the method signature or get it from api_data
 
             # Check if timezone_offset is in api_data
-            timezone_offset_seconds = api_data.get("timezone_offset", 0)  # Default to 0 (UTC)
-            timezone_offset_hours = timezone_offset_seconds / 3600
+            timezone_offset_seconds = api_data.get(
+                "timezone_offset", 0
+            )  # Default to 0 (UTC)
 
             # Target hours in local time
             target_local_hours = [2, 5, 8, 11, 14, 17, 20, 23]
 
-            # Convert local hours to UTC hours
-            target_utc_hours = [(h - int(timezone_offset_hours)) % 24 for h in target_local_hours]
-
             # Get current UTC time
-            now_utc = datetime.now(timezone.utc)
+            now_utc = datetime.now(UTC)
 
             # Calculate local time by adding timezone offset
             now_local = now_utc + timedelta(seconds=timezone_offset_seconds)
 
             # Get start of tomorrow in local time (midnight local time of next day)
             tomorrow_local = now_local + timedelta(days=1)
-            tomorrow_start_local = datetime(tomorrow_local.year, tomorrow_local.month, tomorrow_local.day, tzinfo=timezone.utc)
+            tomorrow_start_local = datetime(
+                tomorrow_local.year,
+                tomorrow_local.month,
+                tomorrow_local.day,
+                tzinfo=UTC,
+            )
             # Convert to UTC timestamp (subtract offset to get UTC equivalent of local midnight)
-            tomorrow_start_utc = tomorrow_start_local - timedelta(seconds=timezone_offset_seconds)
+            tomorrow_start_utc = tomorrow_start_local - timedelta(
+                seconds=timezone_offset_seconds
+            )
             tomorrow_start = tomorrow_start_utc.timestamp()
             tomorrow_end = tomorrow_start + 86400  # 24 hours
 
@@ -452,13 +461,15 @@ class WeatherService:
                 # Check if timestamp is within tomorrow's range (in local time)
                 if tomorrow_start <= dt < tomorrow_end:
                     # Convert timestamp to local datetime to check if it's actually tomorrow
-                    item_utc = datetime.fromtimestamp(dt, tz=timezone.utc)
+                    item_utc = datetime.fromtimestamp(dt, tz=UTC)
                     item_local = item_utc + timedelta(seconds=timezone_offset_seconds)
 
                     # Check if item's local date matches tomorrow's local date
-                    if (item_local.year == tomorrow_local.year and
-                        item_local.month == tomorrow_local.month and
-                        item_local.day == tomorrow_local.day):
+                    if (
+                        item_local.year == tomorrow_local.year
+                        and item_local.month == tomorrow_local.month
+                        and item_local.day == tomorrow_local.day
+                    ):
                         tomorrow_candidates.append(item)
 
             # For each target local hour, find the closest item (within 1 hour tolerance)
@@ -467,14 +478,14 @@ class WeatherService:
 
             for target_local_hour in target_local_hours:
                 best_item = None
-                min_diff_minutes = float('inf')
+                min_diff_minutes = float("inf")
 
                 for item in tomorrow_candidates:
                     if id(item) in used_items:
                         continue
 
                     dt = item.get("dt", 0)
-                    item_utc = datetime.fromtimestamp(dt, tz=timezone.utc)
+                    item_utc = datetime.fromtimestamp(dt, tz=UTC)
                     item_local = item_utc + timedelta(seconds=timezone_offset_seconds)
 
                     # Get local hour and minutes
@@ -513,10 +524,12 @@ class WeatherService:
                 hours_found_local = []
                 for item in tomorrow_items:
                     dt = item.get("dt", 0)
-                    item_utc = datetime.fromtimestamp(dt, tz=timezone.utc)
+                    item_utc = datetime.fromtimestamp(dt, tz=UTC)
                     item_local = item_utc + timedelta(seconds=timezone_offset_seconds)
                     hours_found_local.append(item_local.hour)
-                logger.debug(f"Tomorrow forecast: local hours {hours_found_local}, target local hours {target_local_hours}")
+                logger.debug(
+                    f"Tomorrow forecast: local hours {hours_found_local}, target local hours {target_local_hours}"
+                )
 
             return tomorrow_items
         elif period == "3days":
@@ -595,14 +608,17 @@ class WeatherService:
         if period == "today":
             try:
                 weather_data_obj = WeatherData.objects.filter(
-                    city=city,
-                    forecast_period=period
+                    city=city, forecast_period=period
                 ).first()
                 if weather_data_obj and weather_data_obj.data:
                     saved_data = weather_data_obj.data
-                    logger.info(f"Found saved data for {city.name} ({period}) in database")
+                    logger.info(
+                        f"Found saved data for {city.name} ({period}) in database"
+                    )
             except Exception as e:
-                logger.warning(f"Error reading saved data for {city.name} ({period}): {e}")
+                logger.warning(
+                    f"Error reading saved data for {city.name} ({period}): {e}"
+                )
 
         # Step 3: Determine exclude parameters for One Call API 3.0
         # One Call API 3.0 uses /onecall endpoint with exclude parameter
@@ -744,11 +760,11 @@ class WeatherService:
         Returns:
             Merged list with all available intervals
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         target_hours = [2, 5, 8, 11, 14, 17, 20, 23]
-        now = datetime.now(timezone.utc)
-        today_start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc).timestamp()
+        now = datetime.now(UTC)
+        today_start = datetime(now.year, now.month, now.day, tzinfo=UTC).timestamp()
         today_end = today_start + 86400  # 24 hours
 
         # Create a dictionary keyed by hour for quick lookup
@@ -759,7 +775,7 @@ class WeatherService:
             for item in saved_data:
                 dt = item.get("dt", 0)
                 if today_start <= dt < today_end:
-                    item_datetime = datetime.fromtimestamp(dt, tz=timezone.utc)
+                    item_datetime = datetime.fromtimestamp(dt, tz=UTC)
                     if item_datetime.hour in target_hours:
                         merged_dict[item_datetime.hour] = item
 
@@ -767,7 +783,7 @@ class WeatherService:
         for item in new_data:
             dt = item.get("dt", 0)
             if today_start <= dt < today_end:
-                item_datetime = datetime.fromtimestamp(dt, tz=timezone.utc)
+                item_datetime = datetime.fromtimestamp(dt, tz=UTC)
                 if item_datetime.hour in target_hours:
                     # Always use new data if available (more recent)
                     merged_dict[item_datetime.hour] = item

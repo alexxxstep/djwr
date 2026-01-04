@@ -6,16 +6,17 @@ Tests both external (OpenWeatherMap) and internal (Django REST) APIs.
 
 import os
 import sys
+
 import django
+import requests
 
 # Setup Django
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
-import requests
-from app.models import City
-from app.services.weather_service import WeatherService
+from app.models import City  # noqa: E402
+from app.services.weather_service import WeatherService  # noqa: E402
 
 BASE_URL = "http://localhost:8000/api"
 
@@ -203,4 +204,3 @@ if __name__ == "__main__":
         import traceback
 
         traceback.print_exc()
-

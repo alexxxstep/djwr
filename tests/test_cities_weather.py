@@ -14,7 +14,7 @@ import pytest
 from rest_framework import status
 
 from app.models import City
-from tests.factories import CityFactory, WeatherDataFactory
+from tests.factories import CityFactory
 
 
 class TestCityListView:
@@ -109,6 +109,7 @@ class TestCityDetailView:
     def test_city_detail_with_weather(self, mock_weather_service, api_client, db):
         """Test city detail includes current weather from JSONField."""
         from django.utils import timezone
+
         from app.models import WeatherData
 
         # Mock WeatherService to not make real API calls
@@ -401,6 +402,7 @@ class TestWeatherHistoryView:
     def test_weather_history_success(self, api_client, city):
         """Test successful weather history retrieval with JSONField."""
         from django.utils import timezone
+
         from app.models import WeatherData
 
         # Create historical weather data directly to avoid factory issues
@@ -445,6 +447,7 @@ class TestWeatherHistoryView:
     def test_weather_history_pagination(self, api_client, city):
         """Test weather history pagination with JSONField."""
         from django.utils import timezone
+
         from app.models import WeatherData
 
         # WeatherData has unique_together on (city, forecast_period)
@@ -471,6 +474,7 @@ class TestWeatherHistoryView:
     def test_weather_history_ordered_by_fetched_at(self, api_client, city):
         """Test weather history is ordered by fetched_at descending."""
         from django.utils import timezone
+
         from app.models import WeatherData
 
         # Create weather data with different fetched_at times and periods

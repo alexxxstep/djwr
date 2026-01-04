@@ -2,11 +2,8 @@
 Django REST Framework serializers for DjangoWeatherReminder application.
 """
 
-import json
 import re
-from datetime import datetime
 
-from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
@@ -370,8 +367,10 @@ class SubscriptionCreateSerializer(SubscriptionSerializer):
         if city_id:
             try:
                 city = City.objects.get(pk=city_id)
-            except City.DoesNotExist:
-                raise serializers.ValidationError({"city_id": "City not found."})
+            except City.DoesNotExist as err:
+                raise serializers.ValidationError(
+                    {"city_id": "City not found."}
+                ) from err
         else:
             # Create city from API data
             if not all(key in city_data for key in ["name", "country", "lat", "lon"]):
