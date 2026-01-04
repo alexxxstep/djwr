@@ -12,9 +12,20 @@
  */
 
 import { apiGet, handleApiError } from './api.js';
-import { API_ENDPOINTS, isValidPeriod, DEFAULT_PERIOD, getCacheTTL } from './config.js';
+import {
+  API_ENDPOINTS,
+  isValidPeriod,
+  DEFAULT_PERIOD,
+  getCacheTTL,
+} from './config.js';
 import cache, { Cache } from './cache.js';
-import { getWeatherIcon, getParameterIcon, formatTemperature, formatTime, formatDate } from './icons.js';
+import {
+  getWeatherIcon,
+  getParameterIcon,
+  formatTemperature,
+  formatTime,
+  formatDate,
+} from './icons.js';
 import { initDragToScroll } from './ui.js';
 
 // Store current city timezone offset for time updates
@@ -28,7 +39,11 @@ let currentWeatherTimeInterval = null;
  * @param {boolean} useCache - Whether to use cache (default: true)
  * @returns {Promise<Object>} Weather response
  */
-export async function fetchWeatherForecast(cityId, period = DEFAULT_PERIOD, useCache = true) {
+export async function fetchWeatherForecast(
+  cityId,
+  period = DEFAULT_PERIOD,
+  useCache = true
+) {
   // Validate period
   if (!isValidPeriod(period)) {
     console.warn(`Invalid period "${period}", using "${DEFAULT_PERIOD}"`);
@@ -91,8 +106,12 @@ export function fetchWeeklyForecast(cityId) {
  * @returns {Array} Weather data array
  */
 export function getWeatherDataArray(response) {
-  if (!response?.data) return [];
-  return Array.isArray(response.data) ? response.data : [];
+  if (!response?.data) {
+    console.warn('getWeatherDataArray: no data field in response');
+    return [];
+  }
+  const data = Array.isArray(response.data) ? response.data : [];
+  return data;
 }
 
 /**
@@ -110,7 +129,10 @@ export function getFirstWeatherItem(response) {
  * @param {Object} response - Weather API response
  * @param {string} containerId - Container element ID
  */
-export function updateWeatherDisplay(response, containerId = 'current-weather-content') {
+export function updateWeatherDisplay(
+  response,
+  containerId = 'current-weather-content'
+) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
@@ -119,7 +141,8 @@ export function updateWeatherDisplay(response, containerId = 'current-weather-co
 
   const weatherData = getFirstWeatherItem(response);
   if (!weatherData) {
-    container.innerHTML = '<div class="text-center py-8 text-dark-text-secondary">No weather data available</div>';
+    container.innerHTML =
+      '<div class="text-center py-8 text-dark-text-secondary">No weather data available</div>';
     return;
   }
 
@@ -136,7 +159,9 @@ export function updateWeatherDisplay(response, containerId = 'current-weather-co
   if (cityEl && response.city) {
     const cityName = response.city.name;
     const countryCode = response.city.country || '';
-    cityEl.textContent = countryCode ? `${cityName} (${countryCode})` : cityName;
+    cityEl.textContent = countryCode
+      ? `${cityName} (${countryCode})`
+      : cityName;
   }
 
   // City local time (use timezone_offset from API response)
@@ -166,8 +191,12 @@ export function updateWeatherDisplay(response, containerId = 'current-weather-co
   const tempRangeContainer = highEl?.parentElement;
 
   if (highEl && lowEl && tempRangeContainer) {
-    if (weatherData.temp_max !== null && weatherData.temp_max !== undefined &&
-        weatherData.temp_min !== null && weatherData.temp_min !== undefined) {
+    if (
+      weatherData.temp_max !== null &&
+      weatherData.temp_max !== undefined &&
+      weatherData.temp_min !== null &&
+      weatherData.temp_min !== undefined
+    ) {
       highEl.textContent = `H ${formatTemperature(weatherData.temp_max)}`;
       lowEl.textContent = `L ${formatTemperature(weatherData.temp_min)}`;
       tempRangeContainer.style.display = '';
@@ -238,19 +267,19 @@ function getParameterName(parameter) {
   const names = {
     'feels-like': 'Feels Like',
     'real-feel': 'Feels Like',
-    'humidity': 'Humidity',
-    'pressure': 'Pressure',
-    'wind': 'Wind Speed',
+    humidity: 'Humidity',
+    pressure: 'Pressure',
+    wind: 'Wind Speed',
     'wind-deg': 'Wind Direction',
     'wind-direction': 'Wind Direction',
-    'visibility': 'Visibility',
-    'clouds': 'Clouds',
-    'uvi': 'UV Index',
+    visibility: 'Visibility',
+    clouds: 'Clouds',
+    uvi: 'UV Index',
     'uv-index': 'UV Index',
-    'pop': 'Precipitation',
-    'precipitation': 'Precipitation',
-    'rain': 'Rain',
-    'snow': 'Snow',
+    pop: 'Precipitation',
+    precipitation: 'Precipitation',
+    rain: 'Rain',
+    snow: 'Snow',
   };
 
   const paramLower = (parameter || '').toLowerCase();
@@ -259,7 +288,14 @@ function getParameterName(parameter) {
 
 function updateCurrentWeatherConditions(clone, weatherData) {
   // Helper to show/hide condition row based on data availability
-  const toggleCondition = (rowId, iconElId, valueElId, parameter, value, formatter = (v) => v) => {
+  const toggleCondition = (
+    rowId,
+    iconElId,
+    valueElId,
+    parameter,
+    value,
+    formatter = (v) => v
+  ) => {
     const row = clone.getElementById(rowId);
     const iconEl = clone.getElementById(iconElId);
     const valueEl = clone.getElementById(valueElId);
@@ -286,56 +322,150 @@ function updateCurrentWeatherConditions(clone, weatherData) {
   };
 
   // Real Feel (feels_like)
-  toggleCondition('weather-feels-like-row', 'weather-feels-like-icon', 'weather-feels-like', 'feels-like', weatherData.feels_like, (v) => formatTemperature(v));
+  toggleCondition(
+    'weather-feels-like-row',
+    'weather-feels-like-icon',
+    'weather-feels-like',
+    'feels-like',
+    weatherData.feels_like,
+    (v) => formatTemperature(v)
+  );
 
   // Humidity
-  toggleCondition('weather-humidity-row', 'weather-humidity-icon', 'weather-humidity', 'humidity', weatherData.humidity, (v) => `${v}%`);
+  toggleCondition(
+    'weather-humidity-row',
+    'weather-humidity-icon',
+    'weather-humidity',
+    'humidity',
+    weatherData.humidity,
+    (v) => `${v}%`
+  );
 
   // Pressure
-  toggleCondition('weather-pressure-row', 'weather-pressure-icon', 'weather-pressure', 'pressure', weatherData.pressure, (v) => `${v} hPa`);
+  toggleCondition(
+    'weather-pressure-row',
+    'weather-pressure-icon',
+    'weather-pressure',
+    'pressure',
+    weatherData.pressure,
+    (v) => `${v} hPa`
+  );
 
   // Wind Speed
-  toggleCondition('weather-wind-row', 'weather-wind-icon', 'weather-wind', 'wind', weatherData.wind_speed, (v) => `${v} km/h`);
+  toggleCondition(
+    'weather-wind-row',
+    'weather-wind-icon',
+    'weather-wind',
+    'wind',
+    weatherData.wind_speed,
+    (v) => `${v} km/h`
+  );
 
   // Wind Direction (wind_deg)
-  toggleCondition('weather-wind-deg-row', 'weather-wind-deg-icon', 'weather-wind-deg', 'wind-deg', weatherData.wind_deg, (v) => {
-    const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
-    const index = Math.round(v / 22.5) % 16;
-    return `${directions[index]} (${v}°)`;
-  });
+  toggleCondition(
+    'weather-wind-deg-row',
+    'weather-wind-deg-icon',
+    'weather-wind-deg',
+    'wind-deg',
+    weatherData.wind_deg,
+    (v) => {
+      const directions = [
+        'N',
+        'NNE',
+        'NE',
+        'ENE',
+        'E',
+        'ESE',
+        'SE',
+        'SSE',
+        'S',
+        'SSW',
+        'SW',
+        'WSW',
+        'W',
+        'WNW',
+        'NW',
+        'NNW',
+      ];
+      const index = Math.round(v / 22.5) % 16;
+      return `${directions[index]} (${v}°)`;
+    }
+  );
 
   // Visibility
-  toggleCondition('weather-visibility-row', 'weather-visibility-icon', 'weather-visibility', 'visibility', weatherData.visibility, (v) => {
-    if (v >= 1000) {
-      return `${(v / 1000).toFixed(1)} km`;
+  toggleCondition(
+    'weather-visibility-row',
+    'weather-visibility-icon',
+    'weather-visibility',
+    'visibility',
+    weatherData.visibility,
+    (v) => {
+      if (v >= 1000) {
+        return `${(v / 1000).toFixed(1)} km`;
+      }
+      return `${v} m`;
     }
-    return `${v} m`;
-  });
+  );
 
   // Clouds
-  toggleCondition('weather-clouds-row', 'weather-clouds-icon', 'weather-clouds', 'clouds', weatherData.clouds, (v) => `${v}%`);
+  toggleCondition(
+    'weather-clouds-row',
+    'weather-clouds-icon',
+    'weather-clouds',
+    'clouds',
+    weatherData.clouds,
+    (v) => `${v}%`
+  );
 
   // UV Index
-  toggleCondition('weather-uvi-row', 'weather-uvi-icon', 'weather-uv', 'uvi', weatherData.uvi, (v) => v.toString());
+  toggleCondition(
+    'weather-uvi-row',
+    'weather-uvi-icon',
+    'weather-uv',
+    'uvi',
+    weatherData.uvi,
+    (v) => v.toString()
+  );
 
   // Precipitation Probability (pop)
-  toggleCondition('weather-pop-row', 'weather-pop-icon', 'weather-pop', 'precipitation', weatherData.pop, (v) => `${Math.round(v * 100)}%`);
+  toggleCondition(
+    'weather-pop-row',
+    'weather-pop-icon',
+    'weather-pop',
+    'precipitation',
+    weatherData.pop,
+    (v) => `${Math.round(v * 100)}%`
+  );
 
   // Rain (if available)
-  toggleCondition('weather-rain-row', 'weather-rain-icon', 'weather-rain', 'rain', weatherData.rain, (v) => {
-    if (typeof v === 'object' && v['1h']) {
-      return `${v['1h']} mm`;
+  toggleCondition(
+    'weather-rain-row',
+    'weather-rain-icon',
+    'weather-rain',
+    'rain',
+    weatherData.rain,
+    (v) => {
+      if (typeof v === 'object' && v['1h']) {
+        return `${v['1h']} mm`;
+      }
+      return `${v} mm`;
     }
-    return `${v} mm`;
-  });
+  );
 
   // Snow (if available)
-  toggleCondition('weather-snow-row', 'weather-snow-icon', 'weather-snow', 'snow', weatherData.snow, (v) => {
-    if (typeof v === 'object' && v['1h']) {
-      return `${v['1h']} mm`;
+  toggleCondition(
+    'weather-snow-row',
+    'weather-snow-icon',
+    'weather-snow',
+    'snow',
+    weatherData.snow,
+    (v) => {
+      if (typeof v === 'object' && v['1h']) {
+        return `${v['1h']} mm`;
+      }
+      return `${v} mm`;
     }
-    return `${v} mm`;
-  });
+  );
 }
 
 /**
@@ -344,7 +474,11 @@ function updateCurrentWeatherConditions(clone, weatherData) {
  * @param {string} period - Display period
  * @param {string} containerId - Container element ID
  */
-export function updateHourlyForecast(dataOrResponse, period = 'today', containerId = 'hourly-forecast-container') {
+export function updateHourlyForecast(
+  dataOrResponse,
+  period = 'today',
+  containerId = 'hourly-forecast-container'
+) {
   const container = document.getElementById(containerId);
   if (!container) {
     console.error('Hourly forecast container not found:', containerId);
@@ -364,30 +498,33 @@ export function updateHourlyForecast(dataOrResponse, period = 'today', container
   if (Array.isArray(dataOrResponse)) {
     // If it's already an array, use it directly
     data = dataOrResponse;
-    console.log('updateHourlyForecast: dataOrResponse is array, length:', data.length);
   } else if (dataOrResponse && typeof dataOrResponse === 'object') {
     // If it's an object (API response), extract data and timezone_offset
     data = getWeatherDataArray(dataOrResponse);
     timezoneOffset = dataOrResponse?.timezone_offset || 0;
-    console.log('updateHourlyForecast: dataOrResponse is object, data length:', data.length, 'timezoneOffset:', timezoneOffset);
   } else {
-    console.error('updateHourlyForecast: invalid dataOrResponse:', dataOrResponse);
-    container.innerHTML = '<div class="text-center py-8 text-dark-text-secondary text-sm">No forecast data available</div>';
+    console.error(
+      'updateHourlyForecast: invalid dataOrResponse:',
+      dataOrResponse
+    );
+    container.innerHTML =
+      '<div class="text-center py-8 text-dark-text-secondary text-sm">No forecast data available</div>';
     return;
   }
 
   if (!data || data.length === 0) {
     console.warn('updateHourlyForecast: no data available');
-    container.innerHTML = '<div class="text-center py-8 text-dark-text-secondary text-sm">No forecast data available</div>';
+    container.innerHTML =
+      '<div class="text-center py-8 text-dark-text-secondary text-sm">No forecast data available</div>';
     return;
   }
 
   // Process data based on period
   const displayData = processDataForPeriod(data, period, timezoneOffset);
-  console.log('updateHourlyForecast: displayData length after processing:', displayData.length, 'period:', period);
 
   if (displayData.length === 0) {
-    container.innerHTML = '<div class="text-center py-8 text-dark-text-secondary text-sm">No forecast data available</div>';
+    container.innerHTML =
+      '<div class="text-center py-8 text-dark-text-secondary text-sm">No forecast data available</div>';
     return;
   }
 
@@ -447,10 +584,16 @@ export function updateHourlyForecast(dataOrResponse, period = 'today', container
     // Min/Max temperature (if available) - always show if data exists
     const tempRangeEl = clone.getElementById('hourly-temp-range');
     if (tempRangeEl) {
-      if (item.temp_min !== null && item.temp_min !== undefined &&
-          item.temp_max !== null && item.temp_max !== undefined) {
+      if (
+        item.temp_min !== null &&
+        item.temp_min !== undefined &&
+        item.temp_max !== null &&
+        item.temp_max !== undefined
+      ) {
         tempRangeEl.classList.remove('hidden');
-        tempRangeEl.textContent = `${formatTemperature(item.temp_min)} / ${formatTemperature(item.temp_max)}`;
+        tempRangeEl.textContent = `${formatTemperature(
+          item.temp_min
+        )} / ${formatTemperature(item.temp_max)}`;
         tempRangeEl.style.marginBottom = '0';
       } else {
         tempRangeEl.classList.add('hidden');
@@ -482,52 +625,101 @@ function processDataForPeriod(data, period, timezoneOffset = 0) {
     case 'tomorrow':
       // API already returns filtered data for 3-hour intervals [2AM, 5AM, 8AM, 11AM, 2PM, 5PM, 8PM, 11PM]
       // Just return all data as-is, sorted by timestamp
+      if (!data || data.length === 0) {
+        console.warn('processDataForPeriod: no data for period', period);
+        return [];
+      }
       return data.sort((a, b) => {
-        const dtA = typeof a.dt === 'number' ? a.dt : (a.dt ? new Date(a.dt).getTime() / 1000 : 0);
-        const dtB = typeof b.dt === 'number' ? b.dt : (b.dt ? new Date(b.dt).getTime() / 1000 : 0);
+        const dtA =
+          typeof a.dt === 'number'
+            ? a.dt
+            : a.dt
+            ? new Date(a.dt).getTime() / 1000
+            : 0;
+        const dtB =
+          typeof b.dt === 'number'
+            ? b.dt
+            : b.dt
+            ? new Date(b.dt).getTime() / 1000
+            : 0;
         return dtA - dtB;
       });
 
     case '3days':
       // Backend already returns 3 days, just add _displayDate for each item and sort
-      return data.map((item) => {
-        const itemDate = getItemDate(item);
-        if (itemDate) {
-          // Apply timezone offset to get local date
-          const localDate = new Date(itemDate.getTime() + timezoneOffset * 1000);
-          const displayDate = new Date(localDate.getFullYear(), localDate.getMonth(), localDate.getDate());
-          return {
-            ...item,
-            _displayDate: displayDate,
-          };
-        }
-        return item;
-      }).sort((a, b) => {
-        const dtA = typeof a.dt === 'number' ? a.dt : (a.dt ? new Date(a.dt).getTime() / 1000 : 0);
-        const dtB = typeof b.dt === 'number' ? b.dt : (b.dt ? new Date(b.dt).getTime() / 1000 : 0);
-        return dtA - dtB;
-      });
+      return data
+        .map((item) => {
+          const itemDate = getItemDate(item);
+          if (itemDate) {
+            // Apply timezone offset to get local date
+            const localDate = new Date(
+              itemDate.getTime() + timezoneOffset * 1000
+            );
+            const displayDate = new Date(
+              localDate.getFullYear(),
+              localDate.getMonth(),
+              localDate.getDate()
+            );
+            return {
+              ...item,
+              _displayDate: displayDate,
+            };
+          }
+          return item;
+        })
+        .sort((a, b) => {
+          const dtA =
+            typeof a.dt === 'number'
+              ? a.dt
+              : a.dt
+              ? new Date(a.dt).getTime() / 1000
+              : 0;
+          const dtB =
+            typeof b.dt === 'number'
+              ? b.dt
+              : b.dt
+              ? new Date(b.dt).getTime() / 1000
+              : 0;
+          return dtA - dtB;
+        });
 
     case 'week':
       // Backend already returns 7 days, just add _displayDate for each item and sort
-      return data.map((item) => {
-        const itemDate = getItemDate(item);
-        if (itemDate) {
-          // Apply timezone offset to get local date
-          const localDate = new Date(itemDate.getTime() + timezoneOffset * 1000);
-          const displayDate = new Date(localDate.getFullYear(), localDate.getMonth(), localDate.getDate());
-          return {
-            ...item,
-            _displayDate: displayDate,
-          };
-        }
-        return item;
-      }).sort((a, b) => {
-        const dtA = typeof a.dt === 'number' ? a.dt : (a.dt ? new Date(a.dt).getTime() / 1000 : 0);
-        const dtB = typeof b.dt === 'number' ? b.dt : (b.dt ? new Date(b.dt).getTime() / 1000 : 0);
-        return dtA - dtB;
-      });
-
+      return data
+        .map((item) => {
+          const itemDate = getItemDate(item);
+          if (itemDate) {
+            // Apply timezone offset to get local date
+            const localDate = new Date(
+              itemDate.getTime() + timezoneOffset * 1000
+            );
+            const displayDate = new Date(
+              localDate.getFullYear(),
+              localDate.getMonth(),
+              localDate.getDate()
+            );
+            return {
+              ...item,
+              _displayDate: displayDate,
+            };
+          }
+          return item;
+        })
+        .sort((a, b) => {
+          const dtA =
+            typeof a.dt === 'number'
+              ? a.dt
+              : a.dt
+              ? new Date(a.dt).getTime() / 1000
+              : 0;
+          const dtB =
+            typeof b.dt === 'number'
+              ? b.dt
+              : b.dt
+              ? new Date(b.dt).getTime() / 1000
+              : 0;
+          return dtA - dtB;
+        });
 
     case 'hourly':
       return data.slice(0, 12);
@@ -545,13 +737,21 @@ function processDataForPeriod(data, period, timezoneOffset = 0) {
  */
 function filterByDay(data, dayOffset) {
   const now = new Date();
-  const targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset);
+  const targetDate = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + dayOffset
+  );
 
   return data.filter((item) => {
     const itemDate = getItemDate(item);
     if (!itemDate) return false;
 
-    const itemDay = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
+    const itemDay = new Date(
+      itemDate.getFullYear(),
+      itemDate.getMonth(),
+      itemDate.getDate()
+    );
     return itemDay.getTime() === targetDate.getTime();
   });
 }
@@ -574,15 +774,22 @@ function groupByDayPeriods(data, days) {
     const dayData = data.filter((item) => {
       const itemDate = getItemDate(item);
       if (!itemDate) return false;
-      const itemDay = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
+      const itemDay = new Date(
+        itemDate.getFullYear(),
+        itemDate.getMonth(),
+        itemDate.getDate()
+      );
       return itemDay.getTime() === targetDate.getTime();
     });
 
     // Get representative item for the day (noon or first available)
-    const representative = dayData.find((item) => {
-      const itemDate = getItemDate(item);
-      return itemDate && itemDate.getHours() >= 11 && itemDate.getHours() <= 14;
-    }) || dayData[0];
+    const representative =
+      dayData.find((item) => {
+        const itemDate = getItemDate(item);
+        return (
+          itemDate && itemDate.getHours() >= 11 && itemDate.getHours() <= 14
+        );
+      }) || dayData[0];
 
     if (representative) {
       result.push({
@@ -612,7 +819,11 @@ function getOneDayPerEntry(data, days, timezoneOffset = 0) {
 
     // Apply timezone offset to get local date
     const localDate = new Date(itemDate.getTime() + timezoneOffset * 1000);
-    const itemDay = new Date(localDate.getFullYear(), localDate.getMonth(), localDate.getDate());
+    const itemDay = new Date(
+      localDate.getFullYear(),
+      localDate.getMonth(),
+      localDate.getDate()
+    );
     const dayKey = `${itemDay.getFullYear()}-${itemDay.getMonth()}-${itemDay.getDate()}`;
     const daysDiff = Math.floor((itemDay - today) / (24 * 60 * 60 * 1000));
 
@@ -659,12 +870,28 @@ function formatTimeLabel(item, period, timezoneOffset = 0) {
 
   if (['week', '3days'].includes(period)) {
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${dayNames[date.getDay()]}, ${date.getDate()} ${monthNames[date.getMonth()]}`;
+    const monthNames = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return `${dayNames[date.getDay()]}, ${date.getDate()} ${
+      monthNames[date.getMonth()]
+    }`;
   }
 
   // Use timestamp directly with timezone offset
-  const timestamp = item.dt || (date instanceof Date ? date.getTime() / 1000 : date);
+  const timestamp =
+    item.dt || (date instanceof Date ? date.getTime() / 1000 : date);
   return formatTime(timestamp, timezoneOffset);
 }
 
@@ -711,7 +938,8 @@ function applySizeToIcon(icon, sizeClass) {
   const svg = icon.tagName === 'svg' ? icon : icon.querySelector('svg');
   if (svg) {
     const currentClass = svg.getAttribute('class') || '';
-    const newClass = currentClass.replace(/w-\d+ h-\d+/g, '').trim() + ' ' + sizeClass;
+    const newClass =
+      currentClass.replace(/w-\d+ h-\d+/g, '').trim() + ' ' + sizeClass;
     svg.setAttribute('class', newClass.trim());
   }
 }
@@ -725,7 +953,14 @@ function applySizeToIcon(icon, sizeClass) {
  */
 function updateForecastDetails(clone, item, fontSize) {
   // Helper to show/hide row based on data availability
-  const toggleRow = (rowId, iconElId, valueElId, parameter, value, formatter = (v) => v) => {
+  const toggleRow = (
+    rowId,
+    iconElId,
+    valueElId,
+    parameter,
+    value,
+    formatter = (v) => v
+  ) => {
     const row = clone.getElementById(rowId);
     const iconEl = clone.getElementById(iconElId);
     const valueEl = clone.getElementById(valueElId);
@@ -753,56 +988,150 @@ function updateForecastDetails(clone, item, fontSize) {
   };
 
   // Real Feel (feels_like)
-  toggleRow('hourly-feels-like-row', 'hourly-feels-like-icon', 'hourly-feels-like', 'feels-like', item.feels_like, (v) => formatTemperature(v));
+  toggleRow(
+    'hourly-feels-like-row',
+    'hourly-feels-like-icon',
+    'hourly-feels-like',
+    'feels-like',
+    item.feels_like,
+    (v) => formatTemperature(v)
+  );
 
   // Humidity
-  toggleRow('hourly-humidity-row', 'hourly-humidity-icon', 'hourly-humidity', 'humidity', item.humidity, (v) => `${v}%`);
+  toggleRow(
+    'hourly-humidity-row',
+    'hourly-humidity-icon',
+    'hourly-humidity',
+    'humidity',
+    item.humidity,
+    (v) => `${v}%`
+  );
 
   // Pressure
-  toggleRow('hourly-pressure-row', 'hourly-pressure-icon', 'hourly-pressure', 'pressure', item.pressure, (v) => `${v} hPa`);
+  toggleRow(
+    'hourly-pressure-row',
+    'hourly-pressure-icon',
+    'hourly-pressure',
+    'pressure',
+    item.pressure,
+    (v) => `${v} hPa`
+  );
 
   // Wind Speed
-  toggleRow('hourly-wind-row', 'hourly-wind-icon', 'hourly-wind', 'wind', item.wind_speed, (v) => `${v} km/h`);
+  toggleRow(
+    'hourly-wind-row',
+    'hourly-wind-icon',
+    'hourly-wind',
+    'wind',
+    item.wind_speed,
+    (v) => `${v} km/h`
+  );
 
   // Wind Direction (wind_deg)
-  toggleRow('hourly-wind-deg-row', 'hourly-wind-deg-icon', 'hourly-wind-deg', 'wind-deg', item.wind_deg, (v) => {
-    const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
-    const index = Math.round(v / 22.5) % 16;
-    return `${directions[index]} (${v}°)`;
-  });
+  toggleRow(
+    'hourly-wind-deg-row',
+    'hourly-wind-deg-icon',
+    'hourly-wind-deg',
+    'wind-deg',
+    item.wind_deg,
+    (v) => {
+      const directions = [
+        'N',
+        'NNE',
+        'NE',
+        'ENE',
+        'E',
+        'ESE',
+        'SE',
+        'SSE',
+        'S',
+        'SSW',
+        'SW',
+        'WSW',
+        'W',
+        'WNW',
+        'NW',
+        'NNW',
+      ];
+      const index = Math.round(v / 22.5) % 16;
+      return `${directions[index]} (${v}°)`;
+    }
+  );
 
   // Visibility
-  toggleRow('hourly-visibility-row', 'hourly-visibility-icon', 'hourly-visibility', 'visibility', item.visibility, (v) => {
-    if (v >= 1000) {
-      return `${(v / 1000).toFixed(1)} km`;
+  toggleRow(
+    'hourly-visibility-row',
+    'hourly-visibility-icon',
+    'hourly-visibility',
+    'visibility',
+    item.visibility,
+    (v) => {
+      if (v >= 1000) {
+        return `${(v / 1000).toFixed(1)} km`;
+      }
+      return `${v} m`;
     }
-    return `${v} m`;
-  });
+  );
 
   // Clouds
-  toggleRow('hourly-clouds-row', 'hourly-clouds-icon', 'hourly-clouds', 'clouds', item.clouds, (v) => `${v}%`);
+  toggleRow(
+    'hourly-clouds-row',
+    'hourly-clouds-icon',
+    'hourly-clouds',
+    'clouds',
+    item.clouds,
+    (v) => `${v}%`
+  );
 
   // UV Index
-  toggleRow('hourly-uvi-row', 'hourly-uvi-icon', 'hourly-uvi', 'uvi', item.uvi, (v) => v.toString());
+  toggleRow(
+    'hourly-uvi-row',
+    'hourly-uvi-icon',
+    'hourly-uvi',
+    'uvi',
+    item.uvi,
+    (v) => v.toString()
+  );
 
   // Precipitation Probability (pop)
-  toggleRow('hourly-pop-row', 'hourly-pop-icon', 'hourly-pop', 'precipitation', item.pop, (v) => `${Math.round(v * 100)}%`);
+  toggleRow(
+    'hourly-pop-row',
+    'hourly-pop-icon',
+    'hourly-pop',
+    'precipitation',
+    item.pop,
+    (v) => `${Math.round(v * 100)}%`
+  );
 
   // Rain (if available)
-  toggleRow('hourly-rain-row', 'hourly-rain-icon', 'hourly-rain', 'rain', item.rain, (v) => {
-    if (typeof v === 'object' && v['1h']) {
-      return `${v['1h']} mm`;
+  toggleRow(
+    'hourly-rain-row',
+    'hourly-rain-icon',
+    'hourly-rain',
+    'rain',
+    item.rain,
+    (v) => {
+      if (typeof v === 'object' && v['1h']) {
+        return `${v['1h']} mm`;
+      }
+      return `${v} mm`;
     }
-    return `${v} mm`;
-  });
+  );
 
   // Snow (if available)
-  toggleRow('hourly-snow-row', 'hourly-snow-icon', 'hourly-snow', 'snow', item.snow, (v) => {
-    if (typeof v === 'object' && v['1h']) {
-      return `${v['1h']} mm`;
+  toggleRow(
+    'hourly-snow-row',
+    'hourly-snow-icon',
+    'hourly-snow',
+    'snow',
+    item.snow,
+    (v) => {
+      if (typeof v === 'object' && v['1h']) {
+        return `${v['1h']} mm`;
+      }
+      return `${v} mm`;
     }
-    return `${v} mm`;
-  });
+  );
 }
 
 /**

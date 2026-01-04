@@ -183,7 +183,6 @@ export function toggleAirConditions() {
   const seeMoreBtn = document.getElementById('see-more-btn');
   if (seeMoreBtn) {
     seeMoreBtn.addEventListener('click', () => {
-      console.log('See more clicked');
     });
   }
 }

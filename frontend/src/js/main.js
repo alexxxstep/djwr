@@ -51,7 +51,6 @@ function debounce(fn, delay) {
  * Initialize application
  */
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('DjangoWeatherReminder frontend loaded');
 
   // Initialize UI components
   initSidebar();
@@ -312,7 +311,6 @@ async function loadUserInfo() {
           newUserInfoBtn.addEventListener('click', async (e) => {
             e.preventDefault();
             e.stopPropagation();
-            console.log('User info clicked, opening profile modal...');
 
             // Check if modal exists
             const modal = document.getElementById('profile-modal');

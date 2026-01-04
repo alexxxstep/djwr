@@ -151,8 +151,6 @@ export function handleOAuthCallback() {
  * Show user profile modal
  */
 export async function showUserProfileModal() {
-  console.log('showUserProfileModal called');
-
   const modal = document.getElementById('profile-modal');
   if (!modal) {
     console.error('Profile modal not found in DOM. Available modals:', {
@@ -163,18 +161,13 @@ export async function showUserProfileModal() {
     return;
   }
 
-  console.log('Modal found, loading profile...');
-
   try {
     // Try to load user profile data
     let profile = await getUserProfile();
-    console.log('Profile response:', profile);
 
     // If getUserProfile fails, try getCurrentUser as fallback
     if (!profile) {
-      console.log('getUserProfile returned null, trying getCurrentUser...');
       const user = await getCurrentUser();
-      console.log('Current user:', user);
       if (user) {
         profile = {
           email: user.email,
@@ -206,10 +199,8 @@ export async function showUserProfileModal() {
     hideProfileMessages();
 
     // Show modal
-    console.log('Showing modal...');
     modal.classList.remove('hidden');
     setupProfileModalHandlers();
-    console.log('Modal should be visible now');
   } catch (error) {
     console.error('Failed to load profile:', error);
     showProfileError('Failed to load profile data: ' + (error.message || 'Unknown error'));
