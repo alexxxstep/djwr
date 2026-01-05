@@ -1,0 +1,131 @@
+<!-- Subscription Settings Modal -->
+<div
+  id="subscription-modal"
+  class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+>
+  <div
+    class="bg-dark-bg-card rounded-lg shadow-xl max-w-md w-full p-4 sm:p-6 fade-in my-auto max-h-[95vh] overflow-y-auto"
+  >
+    <!-- Modal Header -->
+    <div class="flex items-center justify-between mb-3 sm:mb-4">
+      <h3 class="text-lg sm:text-xl font-semibold text-dark-text-primary">
+        Subscription Settings
+      </h3>
+      <button
+        id="modal-close-btn"
+        class="text-dark-text-secondary hover:text-dark-text-primary transition-colors p-1"
+        title="Close"
+      >
+        <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M6 18L18 6M6 6l12 12"
+          />
+        </svg>
+      </button>
+    </div>
+
+    <!-- City Name -->
+    <div class="mb-3 sm:mb-4">
+      <p class="text-xs sm:text-sm text-dark-text-secondary mb-1">City</p>
+      <p id="modal-city-name" class="text-sm sm:text-base font-medium text-dark-text-primary"></p>
+    </div>
+
+    <!-- Period Selection -->
+    <div class="mb-3 sm:mb-4">
+      <label
+        for="modal-period"
+        class="block text-xs sm:text-sm font-medium text-dark-text-secondary mb-1 sm:mb-2"
+      >
+        Update Period (hours)
+      </label>
+      <select
+        id="modal-period"
+        class="w-full text-sm sm:text-base bg-dark-bg-secondary text-dark-text-primary border border-dark-bg-primary rounded-lg px-2 sm:px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-blue"
+      >
+        <option value="1">1 hour</option>
+        <option value="3">3 hours</option>
+        <option value="6" selected>6 hours</option>
+        <option value="12">12 hours</option>
+      </select>
+    </div>
+
+    <!-- Forecast Period Selection -->
+    <div class="mb-3 sm:mb-4">
+      <label
+        for="modal-forecast-period"
+        class="block text-xs sm:text-sm font-medium text-dark-text-secondary mb-1 sm:mb-2"
+      >
+        Forecast Period
+      </label>
+      <select
+        id="modal-forecast-period"
+        class="w-full text-sm sm:text-base bg-dark-bg-secondary text-dark-text-primary border border-dark-bg-primary rounded-lg px-2 sm:px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-blue"
+      >
+        <option value="current" selected>Current</option>
+        <option value="today">Today</option>
+        <option value="tomorrow">Tomorrow</option>
+        <option value="3days">3 Days</option>
+        <option value="week">Week</option>
+      </select>
+    </div>
+
+    <!-- Notification Type Selection -->
+    <div class="mb-3 sm:mb-4">
+      <label
+        for="modal-notification-type"
+        class="block text-xs sm:text-sm font-medium text-dark-text-secondary mb-1 sm:mb-2"
+      >
+        Notification Type
+      </label>
+      <select
+        id="modal-notification-type"
+        class="w-full text-sm sm:text-base bg-dark-bg-secondary text-dark-text-primary border border-dark-bg-primary rounded-lg px-2 sm:px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-blue"
+      >
+        <option value="email" selected>Email</option>
+        <option value="webhook">Webhook</option>
+        <option value="both">Both</option>
+      </select>
+    </div>
+
+    <!-- Active Status (shown for both creating and editing) -->
+    <div class="mb-4 sm:mb-6" id="modal-active-section">
+      <label class="flex items-center">
+        <input
+          type="checkbox"
+          id="modal-is-active"
+          class="w-4 h-4 text-accent-blue bg-dark-bg-secondary border-dark-bg-primary rounded focus:ring-accent-blue"
+        />
+        <span class="ml-2 text-xs sm:text-sm text-dark-text-secondary">Active subscription</span>
+      </label>
+    </div>
+
+    <!-- Modal Actions -->
+    <div class="flex flex-col gap-3">
+      <div class="flex gap-3">
+        <button
+          id="modal-cancel-btn"
+          class="flex-1 px-4 py-2 bg-dark-bg-secondary text-dark-text-primary rounded-lg hover:bg-dark-bg-primary transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          id="modal-subscribe-btn"
+          class="flex-1 px-4 py-2 bg-accent-blue text-white rounded-lg hover:bg-blue-600 transition-colors"
+        >
+          Save
+        </button>
+      </div>
+      <!-- Unsubscribe Button (only shown when editing existing subscription) -->
+      <button
+        id="modal-unsubscribe-btn"
+        class="hidden w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+      >
+        Unsubscribe
+      </button>
+    </div>
+  </div>
+</div>
+

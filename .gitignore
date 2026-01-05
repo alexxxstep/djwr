@@ -63,7 +63,7 @@ frontend/dist/
 *.map
 
 # Package managers
-package-lock.json
+# package-lock.json - keep it for deterministic builds
 
 # YAML linting
 .yamllint

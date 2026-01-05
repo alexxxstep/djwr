@@ -1,0 +1,139 @@
+<!-- User Profile Modal -->
+<div
+  id="profile-modal"
+  class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+>
+  <div
+    class="bg-dark-bg-card rounded-lg shadow-xl max-w-md w-full p-4 sm:p-6 fade-in my-auto max-h-[95vh] overflow-y-auto"
+  >
+    <!-- Modal Header -->
+    <div class="flex items-center justify-between mb-3 sm:mb-4">
+      <h3 class="text-lg sm:text-xl font-semibold text-dark-text-primary">
+        User Profile
+      </h3>
+      <button
+        id="profile-modal-close-btn"
+        class="text-dark-text-secondary hover:text-dark-text-primary transition-colors p-1"
+        title="Close"
+      >
+        <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M6 18L18 6M6 6l12 12"
+          />
+        </svg>
+      </button>
+    </div>
+
+    <!-- Error Message -->
+    <div id="profile-error-message" class="hidden mb-4 p-3 bg-red-900 bg-opacity-30 border border-red-500 rounded-lg text-sm text-red-300"></div>
+
+    <!-- Success Message -->
+    <div id="profile-success-message" class="hidden mb-4 p-3 bg-green-900 bg-opacity-30 border border-green-500 rounded-lg text-sm text-green-300"></div>
+
+    <!-- Profile Form -->
+    <form id="profile-form">
+      <!-- Email (read-only) -->
+      <div class="mb-3 sm:mb-4">
+        <label
+          for="profile-email"
+          class="block text-xs sm:text-sm font-medium text-dark-text-secondary mb-1 sm:mb-2"
+        >
+          Email
+        </label>
+        <input
+          type="email"
+          id="profile-email"
+          readonly
+          class="w-full text-sm sm:text-base bg-dark-bg-secondary text-dark-text-secondary border border-dark-bg-primary rounded-lg px-2 sm:px-3 py-2 cursor-not-allowed"
+        />
+      </div>
+
+      <!-- Username (read-only) -->
+      <div class="mb-3 sm:mb-4">
+        <label
+          for="profile-username"
+          class="block text-xs sm:text-sm font-medium text-dark-text-secondary mb-1 sm:mb-2"
+        >
+          Username
+        </label>
+        <input
+          type="text"
+          id="profile-username"
+          readonly
+          class="w-full text-sm sm:text-base bg-dark-bg-secondary text-dark-text-secondary border border-dark-bg-primary rounded-lg px-2 sm:px-3 py-2 cursor-not-allowed"
+        />
+      </div>
+
+      <!-- First Name -->
+      <div class="mb-3 sm:mb-4">
+        <label
+          for="profile-first-name"
+          class="block text-xs sm:text-sm font-medium text-dark-text-secondary mb-1 sm:mb-2"
+        >
+          First Name
+        </label>
+        <input
+          type="text"
+          id="profile-first-name"
+          class="w-full text-sm sm:text-base bg-dark-bg-secondary text-dark-text-primary border border-dark-bg-primary rounded-lg px-2 sm:px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-blue"
+        />
+      </div>
+
+      <!-- Last Name -->
+      <div class="mb-3 sm:mb-4">
+        <label
+          for="profile-last-name"
+          class="block text-xs sm:text-sm font-medium text-dark-text-secondary mb-1 sm:mb-2"
+        >
+          Last Name
+        </label>
+        <input
+          type="text"
+          id="profile-last-name"
+          class="w-full text-sm sm:text-base bg-dark-bg-secondary text-dark-text-primary border border-dark-bg-primary rounded-lg px-2 sm:px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-blue"
+        />
+      </div>
+
+      <!-- Webhook URL -->
+      <div class="mb-4 sm:mb-6">
+        <label
+          for="profile-webhook-url"
+          class="block text-xs sm:text-sm font-medium text-dark-text-secondary mb-1 sm:mb-2"
+        >
+          Webhook URL (optional)
+        </label>
+        <input
+          type="url"
+          id="profile-webhook-url"
+          placeholder="https://example.com/webhook"
+          class="w-full text-sm sm:text-base bg-dark-bg-secondary text-dark-text-primary border border-dark-bg-primary rounded-lg px-2 sm:px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-blue"
+        />
+        <p class="mt-1 text-xs text-dark-text-secondary">
+          URL для отримання webhook повідомлень про погоду
+        </p>
+      </div>
+
+      <!-- Modal Actions -->
+      <div class="flex gap-3">
+        <button
+          type="button"
+          id="profile-cancel-btn"
+          class="flex-1 px-4 py-2 bg-dark-bg-secondary text-dark-text-primary rounded-lg hover:bg-dark-bg-primary transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          id="profile-save-btn"
+          class="flex-1 px-4 py-2 bg-accent-blue text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Save
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+

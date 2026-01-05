@@ -1,0 +1,27 @@
+<!-- Selected City Detail Card (Top of Right Panel) -->
+<div class="card-gradient p-6 mb-4 fade-in" id="selected-city-detail">
+  <!-- Loading state -->
+  <div class="text-center py-8">
+    <div class="spinner-large mx-auto mb-4"></div>
+    <p class="text-dark-text-secondary text-sm pulse-slow">Loading city details...</p>
+  </div>
+</div>
+
+<!-- Template for city detail (used by JavaScript) -->
+<template id="city-detail-template">
+  <div>
+    <div class="text-sm text-dark-text-secondary mb-2" id="detail-date"></div>
+    <h2 class="text-2xl font-bold mb-1" id="detail-city"></h2>
+    <p class="text-base text-dark-text-secondary mb-4" id="detail-description"></p>
+    <div class="flex items-baseline justify-between">
+      <div>
+        <div class="text-5xl font-bold mb-2" id="detail-temp"></div>
+        <div class="text-sm text-dark-text-secondary">
+          <span id="detail-high"></span> / <span id="detail-low"></span>
+        </div>
+      </div>
+      <div id="detail-icon-large"></div>
+    </div>
+  </div>
+</template>
+

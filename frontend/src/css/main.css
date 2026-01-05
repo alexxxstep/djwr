@@ -1,0 +1,242 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles */
+@layer base {
+  body {
+    @apply bg-dark-bg-primary text-dark-text-primary;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  /* Scrollbar styling for dark theme */
+  .scrollbar-dark::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-dark::-webkit-scrollbar-track {
+    @apply bg-dark-bg-secondary rounded;
+  }
+
+  .scrollbar-dark::-webkit-scrollbar-thumb {
+    @apply bg-dark-bg-card rounded hover:bg-opacity-80 transition-colors;
+  }
+
+  .scrollbar-dark::-webkit-scrollbar-thumb:hover {
+    @apply bg-accent-blue/50;
+  }
+
+  /* Hide scrollbar for drag-scroll containers */
+  .drag-scroll {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+  .drag-scroll::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
+
+  /* Card gradient with hover effect */
+  .card-gradient {
+    @apply bg-gradient-card rounded-2xl shadow-card transition-all duration-300;
+  }
+
+  .card-gradient:hover {
+    @apply shadow-card-hover;
+  }
+
+  /* Loading spinner */
+  .spinner {
+    @apply inline-block w-6 h-6 border-2 border-dark-text-secondary border-t-accent-blue rounded-full animate-spin;
+  }
+
+  /* Period selector button active state */
+  .period-btn.active {
+    @apply bg-accent-blue text-white;
+  }
+
+  .spinner-large {
+    @apply w-12 h-12 border-4 border-dark-text-secondary border-t-accent-blue;
+  }
+
+  /* Fade-in animation for cards */
+  .fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+
+  .fade-in-delay-1 {
+    animation: fadeIn 0.5s ease-in-out 0.1s both;
+  }
+
+  .fade-in-delay-2 {
+    animation: fadeIn 0.5s ease-in-out 0.2s both;
+  }
+
+  .fade-in-delay-3 {
+    animation: fadeIn 0.5s ease-in-out 0.3s both;
+  }
+
+  /* Slide-in animation for sidebar */
+  .slide-in-left {
+    animation: slideInLeft 0.3s ease-out;
+  }
+
+  /* Slide-in animation for right panel (mobile) */
+  .slide-in-right {
+    animation: slideInRight 0.3s ease-out;
+  }
+
+  /* Card hover effects */
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-card-hover;
+  }
+
+  /* Button hover effects */
+  .btn-primary {
+    @apply bg-accent-blue text-white px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  }
+
+  .btn-primary:hover {
+    @apply bg-blue-600 transform scale-105 shadow-lg;
+  }
+
+  .btn-primary:active {
+    @apply transform scale-95;
+  }
+
+  /* Input focus effects */
+  .input-focus {
+    @apply transition-all duration-200 focus:ring-2 focus:ring-accent-blue focus:border-accent-blue;
+  }
+
+  /* Weather icon animation */
+  .weather-icon {
+    @apply transition-transform duration-300;
+  }
+
+  .weather-icon svg {
+    @apply w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8;
+  }
+
+  .weather-icon:hover {
+    @apply transform scale-110;
+  }
+
+  /* Pulse animation for loading states */
+  .pulse-slow {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Shimmer effect for loading cards */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(15, 52, 96, 0.4) 0%,
+      rgba(22, 33, 62, 0.6) 50%,
+      rgba(15, 52, 96, 0.4) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  /* Smooth transitions for all interactive elements */
+  .transition-smooth {
+    @apply transition-all duration-300 ease-in-out;
+  }
+
+  /* City list item hover */
+  .city-item-hover {
+    @apply transition-all duration-200 hover:bg-accent-blue/10 hover:border-accent-blue/50;
+  }
+
+  /* Navigation item active state */
+  .nav-active {
+    @apply text-accent-blue bg-dark-bg-card relative;
+  }
+
+  .nav-active::before {
+    content: '';
+    @apply absolute left-0 top-0 bottom-0 w-1 bg-accent-blue rounded-r;
+  }
+
+  /* Period button active state */
+  .period-active {
+    @apply text-accent-blue bg-dark-bg-card font-semibold;
+  }
+}
+
+@layer utilities {
+  /* Keyframe animations */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideInLeft {
+    from {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slideInRight {
+    from {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  /* Responsive utilities */
+  @media (max-width: 768px) {
+    .mobile-hidden {
+      @apply hidden;
+    }
+
+    .mobile-full-width {
+      @apply w-full;
+    }
+  }
+
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .tablet-2-col {
+      @apply grid grid-cols-2 gap-4;
+    }
+  }
+
+  @media (min-width: 1025px) {
+    .desktop-3-col {
+      @apply grid grid-cols-3 gap-6;
+    }
+  }
+}
+

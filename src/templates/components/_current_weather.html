@@ -1,0 +1,87 @@
+<!-- Current Weather Card (Central Column) -->
+<div class="card-gradient p-3 md:p-4 mb-4 fade-in" style="min-height: 160px; max-height: 160px;">
+  <div id="current-weather-content" class="h-full flex flex-col">
+    <!-- Loading state -->
+    <div class="text-center py-8 flex items-center justify-center h-full">
+      <div>
+        <div class="spinner-large mx-auto mb-4"></div>
+        <p class="text-dark-text-secondary pulse-slow">Loading weather data...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Template for weather content (used by JavaScript) -->
+<template id="weather-card-template">
+  <div class="flex items-center justify-center h-full gap-4 md:gap-6">
+    <!-- Left side: City, time, description -->
+    <div class="flex-1 min-w-0">
+      <div class="text-[10px] sm:text-xs text-dark-text-secondary mb-0.5" id="weather-date"></div>
+      <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold mb-2 leading-tight" id="weather-city"></h1>
+      <div class="text-sm sm:text-base text-dark-text-primary mb-2 font-medium" id="weather-time"></div>
+      <p class="text-[10px] sm:text-xs text-dark-text-secondary mb-1" id="weather-description"></p>
+    </div>
+
+    <!-- Center: Temperature and Weather icon -->
+    <div class="flex items-center gap-4 flex-shrink-0">
+      <div class="flex flex-col items-center">
+        <span class="text-xl sm:text-2xl md:text-3xl font-bold" id="weather-temp"></span>
+        <div class="text-[10px] text-dark-text-secondary">
+          <span id="weather-high"></span> / <span id="weather-low"></span>
+        </div>
+      </div>
+      <div id="weather-icon-large"></div>
+    </div>
+
+    <!-- Right side: Air Conditions Info -->
+    <div class="flex-1 min-w-0">
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5 sm:gap-2" id="weather-conditions-grid">
+        <div class="flex flex-col items-center hidden" id="weather-feels-like-row">
+          <div class="mb-0.5" id="weather-feels-like-icon"></div>
+          <span class="text-xs sm:text-sm font-semibold leading-tight" id="weather-feels-like">--</span>
+        </div>
+        <div class="flex flex-col items-center hidden" id="weather-humidity-row">
+          <div class="mb-0.5" id="weather-humidity-icon"></div>
+          <span class="text-xs sm:text-sm font-semibold leading-tight" id="weather-humidity">--</span>
+        </div>
+        <div class="flex flex-col items-center hidden" id="weather-pressure-row">
+          <div class="mb-0.5" id="weather-pressure-icon"></div>
+          <span class="text-xs sm:text-sm font-semibold leading-tight" id="weather-pressure">--</span>
+        </div>
+        <div class="flex flex-col items-center hidden" id="weather-wind-row">
+          <div class="mb-0.5" id="weather-wind-icon"></div>
+          <span class="text-xs sm:text-sm font-semibold leading-tight" id="weather-wind">--</span>
+        </div>
+        <div class="flex flex-col items-center hidden" id="weather-wind-deg-row">
+          <div class="mb-0.5" id="weather-wind-deg-icon"></div>
+          <span class="text-xs sm:text-sm font-semibold leading-tight" id="weather-wind-deg">--</span>
+        </div>
+        <div class="flex flex-col items-center hidden" id="weather-visibility-row">
+          <div class="mb-0.5" id="weather-visibility-icon"></div>
+          <span class="text-xs sm:text-sm font-semibold leading-tight" id="weather-visibility">--</span>
+        </div>
+        <div class="flex flex-col items-center hidden" id="weather-clouds-row">
+          <div class="mb-0.5" id="weather-clouds-icon"></div>
+          <span class="text-xs sm:text-sm font-semibold leading-tight" id="weather-clouds">--</span>
+        </div>
+        <div class="flex flex-col items-center hidden" id="weather-uvi-row">
+          <div class="mb-0.5" id="weather-uvi-icon"></div>
+          <span class="text-xs sm:text-sm font-semibold leading-tight" id="weather-uv">--</span>
+        </div>
+        <div class="flex flex-col items-center hidden" id="weather-pop-row">
+          <div class="mb-0.5" id="weather-pop-icon"></div>
+          <span class="text-xs sm:text-sm font-semibold leading-tight" id="weather-pop">--</span>
+        </div>
+        <div class="flex flex-col items-center hidden" id="weather-rain-row">
+          <div class="mb-0.5" id="weather-rain-icon"></div>
+          <span class="text-xs sm:text-sm font-semibold leading-tight" id="weather-rain">--</span>
+        </div>
+        <div class="flex flex-col items-center hidden" id="weather-snow-row">
+          <div class="mb-0.5" id="weather-snow-icon"></div>
+          <span class="text-xs sm:text-sm font-semibold leading-tight" id="weather-snow">--</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+

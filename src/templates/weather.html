@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Weather - Django Weather Reminder{% endblock %}
+
+{% block content %}
+<div class="flex flex-col md:flex-row h-screen overflow-hidden">
+  <!-- Left Sidebar -->
+  <div class="flex-shrink-0 slide-in-left">
+    {% include 'components/_sidebar.html' %}
+  </div>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 overflow-hidden scrollbar-dark ml-0 md:ml-20 p-4 md:p-6" style="display: flex; flex-direction: column; overflow-y: hidden;">
+    <!-- Auth Form (shown when not authenticated) -->
+    <div id="auth-form-wrapper" class="fade-in">
+      {% include 'components/_auth_form.html' %}
+    </div>
+
+    <!-- Weather Content (shown when authenticated) -->
+    <div id="weather-content" class="hidden" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
+      <!-- Mobile Cities Panel Toggle Button -->
+      <button
+        id="mobile-cities-toggle"
+        class="lg:hidden fixed bottom-4 right-4 z-40 bg-accent-blue text-white p-4 rounded-full shadow-lg hover:bg-blue-600 transition-colors"
+        title="My Cities"
+      >
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+          />
+        </svg>
+      </button>
+
+      <!-- Search Bar -->
+      {% include 'components/_search.html' %}
+
+      <!-- Current Weather Card -->
+      {% include 'components/_current_weather.html' %}
+
+      <!-- Hourly Forecast -->
+      {% include 'components/_hourly_forecast.html' %}
+    </div>
+  </main>
+
+  <!-- Right Panel - Subscribed Cities -->
+  <!-- Desktop: always visible, Mobile: hidden by default, shown via toggle -->
+  <div id="cities-panel-overlay" class="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-50 hidden"></div>
+  <div id="cities-panel-container" class="flex-shrink-0 hidden lg:block fixed lg:relative top-0 right-0 h-full z-50 lg:z-auto">
+    <div id="cities-panel-wrapper" class="fade-in-delay-3">
+      {% include 'components/_subscribed_cities.html' %}
+    </div>
+  </div>
+</div>
+
+<!-- Subscription Settings Modal -->
+{% include 'components/_subscription_modal.html' %}
+
+<!-- User Profile Modal -->
+{% include 'components/_profile_modal.html' %}
+{% endblock %}
+
