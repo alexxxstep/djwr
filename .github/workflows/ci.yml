@@ -62,11 +62,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-uv-
 
-      - name: Create virtual environment
-        run: uv venv
-
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --extra dev --extra test
 
       - name: Run ruff check
         run: uv run ruff check src/ tests/ manage.py
@@ -126,11 +123,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-uv-
 
-      - name: Create virtual environment
-        run: uv venv
-
       - name: Install dependencies
-        run: uv sync --frozen
+        run: |
+          uv sync --extra dev --extra test
+          echo "Checking installed packages:"
+          uv pip list | grep -i django || echo "Django not found in pip list"
+          echo "Checking Python path:"
+          uv run python -c "import sys; print('\n'.join(sys.path))"
+
+      - name: Verify Django installation
+        run: uv run python -c "import django; print(f'Django {django.__version__} installed')"
 
       - name: Run migrations
         run: uv run python manage.py migrate --noinput
@@ -202,11 +204,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-uv-
 
-      - name: Create virtual environment
-        run: uv venv
-
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --extra dev --extra test
 
       - name: Run migrations
         run: uv run python manage.py migrate --noinput
@@ -329,14 +328,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Set up Node.js (with cache if lock file exists)
+        if: hashFiles('package-lock.json') != ''
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
+      - name: Set up Node.js (without cache)
+        if: hashFiles('package-lock.json') == ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: Install dependencies
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Run ESLint (if configured)
         continue-on-error: true
@@ -349,14 +360,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Set up Node.js (with cache if lock file exists)
+        if: hashFiles('package-lock.json') != ''
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
+      - name: Set up Node.js (without cache)
+        if: hashFiles('package-lock.json') == ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: Install dependencies
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Run Jest tests
         run: npm test -- --coverage --watchAll=false
@@ -375,14 +398,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Set up Node.js (with cache if lock file exists)
+        if: hashFiles('package-lock.json') != ''
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
+      - name: Set up Node.js (without cache)
+        if: hashFiles('package-lock.json') == ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: Install dependencies
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Build frontend
         run: npm run build
