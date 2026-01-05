@@ -77,6 +77,11 @@ jest.mock('../icons.js', () => ({
     querySelector: jest.fn(),
   })),
   formatTemperature: jest.fn((temp) => (temp != null ? `${Math.round(temp)}°C` : '--')),
+  formatTime: jest.fn((timestamp, timezoneOffset = 0) => {
+    if (!timestamp) return '';
+    const date = new Date(typeof timestamp === 'number' ? timestamp * 1000 : timestamp);
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  }),
 }));
 
 // Mock DOM

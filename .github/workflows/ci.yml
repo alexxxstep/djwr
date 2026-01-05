@@ -126,13 +126,17 @@ jobs:
       - name: Install dependencies
         run: |
           uv sync --extra dev --extra test
+          # Ensure all dependencies are installed (uv sync sometimes misses some)
+          # Install all dependencies from pyproject.toml explicitly
+          uv pip install "django>=5.0.0,<6.0.0" "djangorestframework>=3.15.0" "djangorestframework-simplejwt>=5.3.0" "drf-spectacular>=0.27.0" "social-auth-app-django>=5.4.0" "celery>=5.3.0" "celery[redis]>=5.3.0" "redis>=5.0.0" "django-redis>=5.4.0" "psycopg2-binary>=2.9.9" "dj-database-url>=2.1.0" "python-dotenv>=1.0.0" "requests>=2.31.0" "cryptography>=41.0.0"
           echo "Checking installed packages:"
-          uv pip list | grep -i django || echo "Django not found in pip list"
-          echo "Checking Python path:"
-          uv run python -c "import sys; print('\n'.join(sys.path))"
+          uv pip list | grep -E "(django|dj-database-url|djangorestframework)" || echo "Some packages not found"
 
       - name: Verify Django installation
         run: uv run python -c "import django; print(f'Django {django.__version__} installed')"
+
+      - name: Verify dj-database-url installation
+        run: uv run python -c "import dj_database_url; print('dj-database-url installed')"
 
       - name: Run migrations
         run: uv run python manage.py migrate --noinput
@@ -205,7 +209,10 @@ jobs:
             ${{ runner.os }}-uv-
 
       - name: Install dependencies
-        run: uv sync --extra dev --extra test
+        run: |
+          uv sync --extra dev --extra test
+          # Ensure all dependencies are installed (uv sync sometimes misses some)
+          uv pip install "django>=5.0.0,<6.0.0" "djangorestframework>=3.15.0" "dj-database-url>=2.1.0" "psycopg2-binary>=2.9.9"
 
       - name: Run migrations
         run: uv run python manage.py migrate --noinput

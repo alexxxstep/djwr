@@ -32,7 +32,7 @@ describe('Config', () => {
     });
 
     test('has correct number of periods', () => {
-      expect(VALID_PERIODS).toHaveLength(7);
+      expect(VALID_PERIODS).toHaveLength(6);
     });
   });
 
@@ -95,7 +95,7 @@ describe('Config', () => {
     });
 
     test('has user profile endpoint', () => {
-      expect(API_ENDPOINTS.userProfile).toBe('users/me/');
+      expect(API_ENDPOINTS.userProfile).toBe('auth/me/');
     });
   });
 

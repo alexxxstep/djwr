@@ -70,6 +70,11 @@ jest.mock('../icons.js', () => ({
   formatTemperature: jest.fn((temp) => (temp !== null && temp !== undefined ? `${Math.round(temp)}°C` : '--')),
   formatTime: jest.fn(() => '12:00 PM'),
   formatDate: jest.fn(() => 'Monday 12:00 PM'),
+  getParameterIcon: jest.fn(() => ({
+    tagName: 'DIV',
+    innerHTML: '<svg></svg>',
+    querySelector: jest.fn(),
+  })),
 }));
 
 // Mock DOM
@@ -90,6 +95,7 @@ describe('Weather', () => {
           className: '',
           classList: { add: jest.fn(), remove: jest.fn() },
           appendChild: jest.fn(),
+          setAttribute: jest.fn(),
           querySelector: jest.fn(() => null),
           querySelectorAll: jest.fn(() => []),
         };
@@ -321,6 +327,12 @@ describe('Weather', () => {
           textContent: '',
           innerHTML: '',
           appendChild: jest.fn(),
+          classList: {
+            add: jest.fn(),
+            remove: jest.fn(),
+            toggle: jest.fn(),
+          },
+          setAttribute: jest.fn(),
         })),
       };
 
