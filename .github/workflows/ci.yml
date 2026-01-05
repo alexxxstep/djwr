@@ -129,14 +129,19 @@ jobs:
           # Ensure all dependencies are installed (uv sync sometimes misses some)
           # Install all dependencies from pyproject.toml explicitly
           uv pip install "django>=5.0.0,<6.0.0" "djangorestframework>=3.15.0" "djangorestframework-simplejwt>=5.3.0" "drf-spectacular>=0.27.0" "social-auth-app-django>=5.4.0" "celery>=5.3.0" "celery[redis]>=5.3.0" "redis>=5.0.0" "django-redis>=5.4.0" "psycopg2-binary>=2.9.9" "dj-database-url>=2.1.0" "python-dotenv>=1.0.0" "requests>=2.31.0" "cryptography>=41.0.0"
+          # Install project in editable mode
+          uv pip install -e .
           echo "Checking installed packages:"
-          uv pip list | grep -E "(django|dj-database-url|djangorestframework)" || echo "Some packages not found"
+          uv pip list | grep -E "(django|dj-database-url|python-dotenv|djangorestframework)" || echo "Some packages not found"
 
       - name: Verify Django installation
         run: uv run python -c "import django; print(f'Django {django.__version__} installed')"
 
       - name: Verify dj-database-url installation
         run: uv run python -c "import dj_database_url; print('dj-database-url installed')"
+
+      - name: Verify python-dotenv installation
+        run: uv run python -c "from dotenv import load_dotenv; print('python-dotenv installed')"
 
       - name: Run migrations
         run: uv run python manage.py migrate --noinput
@@ -212,7 +217,9 @@ jobs:
         run: |
           uv sync --extra dev --extra test
           # Ensure all dependencies are installed (uv sync sometimes misses some)
-          uv pip install "django>=5.0.0,<6.0.0" "djangorestframework>=3.15.0" "dj-database-url>=2.1.0" "psycopg2-binary>=2.9.9"
+          uv pip install "django>=5.0.0,<6.0.0" "djangorestframework>=3.15.0" "dj-database-url>=2.1.0" "python-dotenv>=1.0.0" "psycopg2-binary>=2.9.9"
+          # Install project in editable mode
+          uv pip install -e .
 
       - name: Run migrations
         run: uv run python manage.py migrate --noinput
