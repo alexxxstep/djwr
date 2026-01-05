@@ -217,7 +217,7 @@ jobs:
         run: |
           uv sync --extra dev --extra test
           # Ensure all dependencies are installed (uv sync sometimes misses some)
-          uv pip install "django>=5.0.0,<6.0.0" "djangorestframework>=3.15.0" "dj-database-url>=2.1.0" "python-dotenv>=1.0.0" "psycopg2-binary>=2.9.9"
+          uv pip install "django>=5.0.0,<6.0.0" "djangorestframework>=3.15.0" "djangorestframework-simplejwt>=5.3.0" "drf-spectacular>=0.27.0" "social-auth-app-django>=5.4.0" "celery>=5.3.0" "redis>=5.0.0" "django-redis>=5.4.0" "dj-database-url>=2.1.0" "python-dotenv>=1.0.0" "psycopg2-binary>=2.9.9" "requests>=2.31.0" "cryptography>=41.0.0"
           # Install project in editable mode
           uv pip install -e .
 
