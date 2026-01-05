@@ -68,7 +68,7 @@ frontend/dist/
 # YAML linting
 .yamllint
 
-
 celerybeat-schedule.*
+
 
 
