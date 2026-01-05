@@ -68,7 +68,7 @@ package-lock.json
 # YAML linting
 .yamllint
 
-
 celerybeat-schedule.*
+
 
 
