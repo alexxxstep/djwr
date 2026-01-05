@@ -451,9 +451,9 @@ class TestWeatherHistoryView:
         from app.models import WeatherData
 
         # WeatherData has unique_together on (city, forecast_period)
-        # So we can only have 7 unique records per city (one per period)
+        # So we can only have 6 unique records per city (one per period)
         # For pagination test, we use all available periods
-        periods = ["current", "hourly", "today", "tomorrow", "3days", "week", "8days"]
+        periods = ["current", "hourly", "today", "tomorrow", "3days", "week"]
         for i, period in enumerate(periods):
             WeatherData.objects.create(
                 city=city,
@@ -465,11 +465,11 @@ class TestWeatherHistoryView:
         response = api_client.get(f"/api/weather/{city.id}/history/")
 
         assert response.status_code == status.HTTP_200_OK
-        # Should return all 7 records
+        # Should return all 6 records
         if "results" in response.data:
-            assert len(response.data["results"]) == 7
+            assert len(response.data["results"]) == 6
         else:
-            assert len(response.data) == 7
+            assert len(response.data) == 6
 
     def test_weather_history_ordered_by_fetched_at(self, api_client, city):
         """Test weather history is ordered by fetched_at descending."""

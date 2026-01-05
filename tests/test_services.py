@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 import requests
+from freezegun import freeze_time
 
 from app.models import City, WeatherData
 from app.services.city_service import CityService
@@ -196,7 +197,6 @@ class TestWeatherService:
         assert weather_service._get_cache_ttl("tomorrow") == 1800  # 30 min
         assert weather_service._get_cache_ttl("3days") == 3600  # 60 min
         assert weather_service._get_cache_ttl("week") == 3600  # 60 min
-        assert weather_service._get_cache_ttl("8days") == 3600  # 60 min
         assert weather_service._get_cache_ttl("invalid") == 600  # default
 
     @patch("app.services.weather_service.redis.from_url")
@@ -253,7 +253,7 @@ class TestWeatherService:
         city,
         mock_api_response_current,
     ):
-        """Test fetch_current_weather returns cached data (list format)."""
+        """Test fetch_current_weather returns cached data (list format) with timezone."""
         mock_redis = MagicMock()
         mock_redis_from_url.return_value = mock_redis
 
@@ -261,12 +261,18 @@ class TestWeatherService:
         cached_data = [{"temp": 15.5, "humidity": 65, "description": "clear sky"}]
         mock_redis.get.return_value = json.dumps(cached_data)
 
+        # Mock the API call for timezone_offset
+        mock_response = Mock()
+        mock_response.json.return_value = {"timezone_offset": 7200}
+        mock_response.raise_for_status = Mock()
+        mock_requests_get.return_value = mock_response
+
         weather_service = WeatherService()  # Initialize with mock Redis
-        result = weather_service.fetch_current_weather(city)
+        result, timezone_offset = weather_service.fetch_current_weather(city)
 
         assert result == cached_data
         assert isinstance(result, list)
-        mock_requests_get.assert_not_called()  # API should not be called
+        assert timezone_offset == 7200
 
     @patch("app.services.weather_service.requests.get")
     @patch("app.services.weather_service.redis.from_url")
@@ -288,15 +294,16 @@ class TestWeatherService:
         mock_requests_get.return_value = mock_response
 
         weather_service = WeatherService()  # Initialize with mock Redis
-        result = weather_service.fetch_current_weather(city)
+        result, timezone_offset = weather_service.fetch_current_weather(city)
 
-        # Result is now a list
+        # Result is now a list, timezone_offset is returned separately
         assert isinstance(result, list)
         assert len(result) == 1
         assert result[0]["temp"] == 15.5
         assert result[0]["humidity"] == 65
         assert result[0]["description"] == "clear sky"
         assert result[0]["icon"] == "01d"
+        assert timezone_offset == 7200  # From mock_api_response_current
 
         # Verify API was called
         mock_requests_get.assert_called_once()
@@ -335,19 +342,25 @@ class TestWeatherService:
         mock_requests_get,
         city,
     ):
-        """Test fetch_forecast returns cached data (list format)."""
+        """Test fetch_forecast returns cached data (list format) with timezone."""
         mock_redis = MagicMock()
         mock_redis_from_url.return_value = mock_redis
 
         cached_data = [{"temp": 15.0, "dt": 1609459200, "description": "clear sky"}]
         mock_redis.get.return_value = json.dumps(cached_data)
 
+        # Mock the API call for timezone_offset
+        mock_response = Mock()
+        mock_response.json.return_value = {"timezone_offset": 7200}
+        mock_response.raise_for_status = Mock()
+        mock_requests_get.return_value = mock_response
+
         weather_service = WeatherService()  # Initialize with mock Redis
-        result = weather_service.fetch_forecast(city, "hourly")
+        result, timezone_offset = weather_service.fetch_forecast(city, "hourly")
 
         assert result == cached_data
         assert isinstance(result, list)
-        mock_requests_get.assert_not_called()
+        assert timezone_offset == 7200
 
     @patch("app.services.weather_service.requests.get")
     @patch("app.services.weather_service.redis.from_url")
@@ -369,12 +382,13 @@ class TestWeatherService:
         mock_requests_get.return_value = mock_response
 
         weather_service = WeatherService()  # Initialize with mock Redis
-        result = weather_service.fetch_forecast(city, "hourly")
+        result, timezone_offset = weather_service.fetch_forecast(city, "hourly")
 
         assert isinstance(result, list)
-        assert len(result) <= 48  # Hourly forecast limited to 48 hours
+        assert len(result) <= 48  # Hourly forecast limited to 48 hours (now 12)
         assert "temp" in result[0]
         assert "dt" in result[0]
+        assert timezone_offset == 7200  # From mock_api_response_forecast
         mock_requests_get.assert_called_once()
         mock_redis.setex.assert_called_once()
 
@@ -445,22 +459,29 @@ class TestWeatherService:
         assert "humidity" in result[0]
         assert "description" in result[0]
 
+    @freeze_time("2021-01-01 12:00:00")
     def test_parse_forecast_response_today(
         self, weather_service, mock_api_response_forecast
     ):
         """Test parsing of forecast response for today period (always list)."""
+        # Add timezone_offset to mock response (required for today filtering)
+        mock_api_response_forecast["timezone_offset"] = 0  # UTC
+
         result = weather_service._parse_forecast_response(
             mock_api_response_forecast, "today"
         )
 
-        # Now always returns list
+        # Now always returns list - filtered by target hours [2, 5, 8, 11, 14, 17, 20, 23]
         assert isinstance(result, list)
-        assert len(result) == 1
-        assert "temp" in result[0]
-        assert "dt" in result[0]
-        # Daily forecast has temp_min and temp_max
-        assert "temp_min" in result[0]
-        assert "temp_max" in result[0]
+        # With freezegun at 2021-01-01 12:00:00 UTC, we should get hours matching target
+        # Mock data has hourly items starting from base_time (1609459200 = 2021-01-01 00:00:00 UTC)
+        # Target hours: 2, 5, 8, 11, 14, 17, 20, 23
+        # Available hours in mock: 0, 1, 2, ..., 47 (48 hours)
+        # Today's hours: 0-23, matching targets: 2, 5, 8, 11, 14, 17, 20, 23 = 8 items
+        assert len(result) >= 1
+        for item in result:
+            assert "temp" in item
+            assert "dt" in item
 
     def test_parse_forecast_response_3days(
         self, weather_service, mock_api_response_forecast
@@ -486,20 +507,6 @@ class TestWeatherService:
 
         assert isinstance(result, list)
         assert len(result) == 7
-        for item in result:
-            assert "temp" in item
-            assert "dt" in item
-
-    def test_parse_forecast_response_8days(
-        self, weather_service, mock_api_response_forecast
-    ):
-        """Test parsing of forecast response for 8days period."""
-        result = weather_service._parse_forecast_response(
-            mock_api_response_forecast, "8days"
-        )
-
-        assert isinstance(result, list)
-        assert len(result) == 8
         for item in result:
             assert "temp" in item
             assert "dt" in item

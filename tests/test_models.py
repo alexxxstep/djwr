@@ -157,7 +157,6 @@ class TestSubscription:
             ("tomorrow", "Tomorrow"),
             ("3days", "3 Days"),
             ("week", "Week"),
-            ("8days", "8 Days"),
         ]
         assert Subscription.FORECAST_PERIOD_CHOICES == expected_choices
 
@@ -177,7 +176,6 @@ class TestSubscription:
             "tomorrow",
             "3days",
             "week",
-            "8days",
         ]
 
         for period in valid_periods:
@@ -226,7 +224,6 @@ class TestWeatherData:
             ("tomorrow", "Tomorrow"),
             ("3days", "3 Days"),
             ("week", "Week"),
-            ("8days", "8 Days"),
         ]
         assert WeatherData.FORECAST_PERIOD_CHOICES == expected_choices
 
@@ -242,7 +239,6 @@ class TestWeatherData:
             "tomorrow",
             "3days",
             "week",
-            "8days",
         ]
 
         for period in valid_periods:

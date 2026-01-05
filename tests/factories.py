@@ -122,7 +122,6 @@ def _generate_weather_data(forecast_period: str) -> list[dict]:
         "tomorrow": 1,
         "3days": 3,
         "week": 7,
-        "8days": 8,
     }
 
     count = period_items.get(forecast_period, 1)
