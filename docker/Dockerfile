@@ -10,11 +10,13 @@ ENV PYTHONUNBUFFERED=1 \
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (including Node.js for frontend build)
 RUN apt-get update && apt-get install -y \
     gcc \
     postgresql-client \
     curl \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Install UV package manager
@@ -57,6 +59,18 @@ COPY README.md ./
 
 # Install the package itself in editable mode (dependencies already installed above)
 RUN uv pip install --system --no-deps -e .
+
+# Copy frontend files for build
+COPY package.json package-lock.json* ./
+COPY webpack.config.js ./
+COPY frontend/ ./frontend/
+
+# Install Node.js dependencies and build frontend
+# Note: We need devDependencies (webpack, babel, etc.) for the build
+RUN if [ -f "package.json" ]; then \
+        npm ci --no-audit --no-fund || npm install --no-audit --no-fund; \
+        npm run build; \
+    fi
 
 # Copy remaining project files
 COPY . .
