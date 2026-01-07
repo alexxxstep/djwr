@@ -39,7 +39,8 @@ urlpatterns = [
         name="redoc",
     ),
     # Social Auth URLs (must be after main page)
-    path("", include("social_django.urls", namespace="social")),
+    # OAuth URLs are under /oauth/ prefix
+    path("oauth/", include("social_django.urls", namespace="social")),
 ]
 
 # Serve static and media files in development
