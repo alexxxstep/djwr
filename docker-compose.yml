@@ -42,13 +42,13 @@ services:
       context: .
       dockerfile: docker/Dockerfile
     container_name: weather_reminder_web
-    command: python manage.py runserver 0.0.0.0:8000
+    command: python manage.py runserver 0.0.0.0:8080
     volumes:
       - .:/app
       - static_data:/app/staticfiles
       - media_data:/app/media
     ports:
-      - "${WEB_PORT:-8000}:8000"
+      - "${WEB_PORT:-8080}:8080"
     env_file:
       - .env
     environment:
@@ -62,7 +62,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/admin/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/admin/"]
       interval: 30s
       timeout: 10s
       retries: 3
