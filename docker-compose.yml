@@ -45,6 +45,7 @@ services:
     command: python manage.py runserver 0.0.0.0:8080
     volumes:
       - .:/app
+      - /app/frontend/dist  # Anonymous volume to preserve build output from image
       - static_data:/app/staticfiles
       - media_data:/app/media
     ports:
