@@ -73,9 +73,11 @@ COPY src/templates/ ./src/templates/
 RUN if [ -f "package.json" ]; then \
         npm ci --no-audit --no-fund || npm install --no-audit --no-fund; \
         npm run build; \
+        ls -la /app/frontend/dist/ || (echo "ERROR: frontend/dist/ not created!" && exit 1); \
     fi
 
 # Copy remaining project files
+# Note: frontend/dist/ is in .dockerignore, so it won't be overwritten by COPY
 COPY . .
 
 # Create directories for static and media files
