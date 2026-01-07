@@ -60,10 +60,13 @@ COPY README.md ./
 # Install the package itself in editable mode (dependencies already installed above)
 RUN uv pip install --system --no-deps -e .
 
-# Copy frontend files for build
+# Copy frontend files and templates for build (Tailwind needs templates to scan)
 COPY package.json package-lock.json* ./
 COPY webpack.config.js ./
+COPY tailwind.config.js ./
+COPY postcss.config.js* ./
 COPY frontend/ ./frontend/
+COPY src/templates/ ./src/templates/
 
 # Install Node.js dependencies and build frontend
 # Note: We need devDependencies (webpack, babel, etc.) for the build
